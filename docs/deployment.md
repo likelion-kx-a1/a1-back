@@ -18,7 +18,8 @@ Actions secret:
 - `AWS_DEPLOY_ROLE_ARN`
 - `EC2_INSTANCE_ID`
 
-EC2의 `/opt/a1-back/.env`에 DB, Redis, OpenAI, fal.ai 설정을 저장하고 권한을 `600`으로 제한합니다.
+EC2의 `/opt/a1-back/.env`에 DB, Redis, Storage 설정을 저장하고 권한을 `600`으로 제한합니다.
+AI 공급자 환경변수는 담당자와 연동 방식이 확정된 후 추가합니다.
 `compose.prod.yml`과 `infra/nginx/default.conf`도 `/opt/a1-back`에 배치합니다.
 
 운영에서는 `STORAGE_ENDPOINT`를 비워 AWS 기본 S3 엔드포인트를 사용하고 EC2 Instance Profile로

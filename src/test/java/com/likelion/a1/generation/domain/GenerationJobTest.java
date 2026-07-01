@@ -7,7 +7,8 @@ import static org.assertj.core.api.Assertions.*;
 class GenerationJobTest {
     @Test
     void pendingJobCanStartAndComplete() {
-        GenerationJob job = GenerationJob.create(1L, GenerationType.VIDEO_GENERATION, "seedance", "city at night");
+        GenerationJob job = GenerationJob.create(
+                1L, GenerationType.VIDEO_GENERATION, "TEST", "video-model", "city at night");
         job.start("provider-1");
         job.complete("https://storage/result.mp4");
         assertThat(job.getStatus()).isEqualTo(GenerationStatus.COMPLETED);
@@ -15,7 +16,8 @@ class GenerationJobTest {
 
     @Test
     void completedJobCannotFail() {
-        GenerationJob job = GenerationJob.create(1L, GenerationType.IMAGE_GENERATION, "openai", "studio");
+        GenerationJob job = GenerationJob.create(
+                1L, GenerationType.IMAGE_GENERATION, "TEST", "image-model", "studio");
         job.complete("https://storage/result.png");
         assertThatThrownBy(() -> job.fail("late error")).isInstanceOf(BusinessException.class);
     }

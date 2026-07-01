@@ -14,15 +14,6 @@ spring:
       repositories:
         enabled: false
 app:
-  openai:
-    api-key:
-    base-url: http://localhost
-    image-model: gpt-image-2
-  fal:
-    api-key:
-    queue-base-url: http://localhost
-    video-model: bytedance/seedance-2.0/text-to-video
-    poll-interval: 3600000
   storage:
     region: ap-northeast-2
     bucket: test-bucket

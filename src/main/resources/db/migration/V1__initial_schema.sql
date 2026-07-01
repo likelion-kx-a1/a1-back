@@ -175,7 +175,3 @@ CREATE TABLE audit_logs (
  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX idx_audit_logs_user_created ON audit_logs(user_id, created_at DESC);
-
-INSERT INTO ai_models(provider, model_name, display_name, media_type, task_type, is_default)
-VALUES ('OPENAI', 'gpt-image-2', 'GPT Image 2', 'IMAGE', 'IMAGE_GENERATION', TRUE),
-       ('FAL_AI', 'bytedance/seedance-2.0/text-to-video', 'Seedance 2.0', 'VIDEO', 'VIDEO_GENERATION', TRUE);

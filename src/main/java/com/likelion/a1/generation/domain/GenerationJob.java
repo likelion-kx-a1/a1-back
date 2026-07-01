@@ -67,13 +67,12 @@ public class GenerationJob {
     protected GenerationJob() {}
 
     private GenerationJob(Long userId, com.likelion.a1.generation.domain.GenerationType type,
-            String model, String prompt) {
+            String provider, String model, String prompt) {
         this.publicId = UUID.randomUUID();
         this.userId = userId;
         this.type = type;
         this.mediaType = type.mediaType();
-        this.provider = type == com.likelion.a1.generation.domain.GenerationType.VIDEO_GENERATION
-                ? "FAL_AI" : "OPENAI";
+        this.provider = provider;
         this.model = model;
         this.prompt = prompt;
         this.status = GenerationStatus.PENDING;
@@ -87,8 +86,9 @@ public class GenerationJob {
     }
 
     public static GenerationJob create(Long userId,
-            com.likelion.a1.generation.domain.GenerationType type, String model, String prompt) {
-        return new GenerationJob(userId, type, model, prompt);
+            com.likelion.a1.generation.domain.GenerationType type,
+            String provider, String model, String prompt) {
+        return new GenerationJob(userId, type, provider, model, prompt);
     }
 
     public void start(String requestId) {
