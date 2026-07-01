@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: a1-back
+  profiles:
+    default: local
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/a1}
+    username: ${DB_USERNAME:a1}
+    password: ${DB_PASSWORD:a1-local-password}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+    image-model: ${OPENAI_IMAGE_MODEL:gpt-image-2}
+  fal:
+    api-key: ${FAL_KEY:}
+    queue-base-url: ${FAL_QUEUE_BASE_URL:https://queue.fal.run}
+    video-model: ${FAL_VIDEO_MODEL:bytedance/seedance-2.0/text-to-video}
+    poll-interval: ${FAL_POLL_INTERVAL:15000}
+  storage:
+    region: ${AWS_REGION:ap-northeast-2}
+    bucket: ${STORAGE_BUCKET:a1-media}
+    public-base-url: ${STORAGE_PUBLIC_BASE_URL:}
+    endpoint: ${STORAGE_ENDPOINT:}
+    path-style-access: ${STORAGE_PATH_STYLE_ACCESS:false}
