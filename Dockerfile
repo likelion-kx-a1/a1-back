@@ -9,8 +9,11 @@ RUN ./gradlew bootJar --no-daemon
 
 FROM eclipse-temurin:21-jre-alpine
 RUN addgroup -S app && adduser -S app -G app
-USER app
 WORKDIR /app
-COPY --from=builder /workspace/build/libs/*.jar app.jar
+COPY --from=builder --chown=app:app /workspace/build/libs/*.jar app.jar
+
+USER app
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENV SPRING_PROFILES_ACTIVE=prod
+
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
