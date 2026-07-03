@@ -1,6 +1,6 @@
 package com.likelion.a1.generation.domain.repository;
 
-import com.likelion.a1.generation.domain.GenerationJob;
+import com.likelion.a1.generation.domain.model.GenerationJob;
 
 import java.util.Optional;
 import java.util.List;

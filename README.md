@@ -5,6 +5,7 @@ Java 21과 Spring Boot 기반 도메인 중심 모듈형 모놀리스입니다.
 ## 협업 문서
 
 - [요구사항](docs/requirements.md)
+- [아키텍처](docs/architecture.md)
 - [데이터베이스](docs/database.md)
 - [배포](docs/deployment.md)
 

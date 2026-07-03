@@ -2,7 +2,7 @@ package com.likelion.a1.user.presentation.controller;
 
 import com.likelion.a1.global.response.ApiResponse;
 import com.likelion.a1.user.application.service.UserCommandService;
-import com.likelion.a1.user.domain.User;
+import com.likelion.a1.user.domain.model.User;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;

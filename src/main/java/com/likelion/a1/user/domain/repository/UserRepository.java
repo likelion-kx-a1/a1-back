@@ -1,6 +1,6 @@
 package com.likelion.a1.user.domain.repository;
 
-import com.likelion.a1.user.domain.User;
+import com.likelion.a1.user.domain.model.User;
 
 public interface UserRepository {
     User save(User user);

@@ -1,6 +1,6 @@
 package com.likelion.a1.user.application.service;
 
-import com.likelion.a1.user.domain.User;
+import com.likelion.a1.user.domain.model.User;
 import com.likelion.a1.user.domain.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
