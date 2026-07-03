@@ -47,15 +47,27 @@ EC2 Instance Role에는 최소한 ECR 이미지 Pull 권한이 필요합니다.
 운영 설정은 다음 Parameter Store 경로에서 조회합니다.
 
 ```text
-/config/a1-backend_prod/spring.datasource.url
-/config/a1-backend_prod/spring.datasource.username
-/config/a1-backend_prod/spring.datasource.password
-/config/a1-backend_prod/cloud.aws.s3.bucket
-/config/a1-backend_prod/cloud.aws.region.static
+/config/a1-back/SPRING_DATASOURCE_URL
+/config/a1-back/SPRING_DATASOURCE_USERNAME
+/config/a1-back/SPRING_DATASOURCE_PASSWORD
+/config/a1-back/AWS_S3_BUCKET
+/config/a1-back/AWS_REGION
 ```
 
 EC2 Role에는 해당 경로의 `ssm:GetParameter` 권한이 필요합니다. 비밀번호가 고객 관리형
 KMS 키로 암호화된 `SecureString`이면 해당 키의 `kms:Decrypt` 권한도 추가합니다.
+
+```json
+{
+  "Effect": "Allow",
+  "Action": [
+    "ssm:GetParameter",
+    "ssm:GetParameters",
+    "ssm:GetParametersByPath"
+  ],
+  "Resource": "arn:aws:ssm:ap-northeast-2:310971189070:parameter/config/a1-back/*"
+}
+```
 
 `deploy.sh`는 배포할 때 파라미터를 복호화해 `/run/a1-back/a1-back.env`에 `600` 수준의
 권한으로 생성합니다. 이 파일은 Git에 저장되지 않으며 재부팅하면 삭제됩니다. Redis
