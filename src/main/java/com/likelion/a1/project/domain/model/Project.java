@@ -1,4 +1,4 @@
-package com.likelion.a1.user.domain.model;
+package com.likelion.a1.project.domain.model;
 
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;
@@ -7,8 +7,8 @@ import lombok.*;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@Table(name = "auth_sessions")
-public class AuthSession {
+@Table(name = "projects")
+public class Project {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
@@ -16,23 +16,11 @@ public class AuthSession {
   @Column(nullable = false)
   private Long userId;
 
-  @Column(nullable = false, unique = true)
-  private String sessionId;
-
-  private String refreshTokenHash;
-
-  private String ipAddress;
+  @Column(nullable = false, length = 150)
+  private String name;
 
   @Column(columnDefinition = "text")
-  private String userAgent;
-
-  @Column(nullable = false)
-  private boolean rememberMe;
-
-  @Column(nullable = false)
-  private OffsetDateTime expiredAt;
-
-  private OffsetDateTime revokedAt;
+  private String description;
 
   @Column(nullable = false)
   private String status;
@@ -42,4 +30,6 @@ public class AuthSession {
 
   @Column(nullable = false)
   private OffsetDateTime updatedAt;
+
+  private OffsetDateTime deletedAt;
 }

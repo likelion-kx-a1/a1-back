@@ -5,11 +5,10 @@
 ## Bounded Context
 
 - `user`: 계정, 세션, 사용자 설정
-- `generation`: AI 모델과 생성 작업
-- `media`: 미디어 자산, 파일, 버전
-- `library`: 폴더, 태그, 즐겨찾기
-- `prompt`: 역프롬프트와 템플릿
-- `operation`: 사용량과 감사 로그
+- `project`: 사용자 작업 프로젝트
+- `generation`: 생성 작업
+- `library`: 라이브러리, 메시지, 첨부 파일
+- `media`: 생성 미디어와 저장 파일
 
 ## Context 내부 구조
 

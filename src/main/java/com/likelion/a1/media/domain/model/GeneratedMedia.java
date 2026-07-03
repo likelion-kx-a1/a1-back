@@ -1,4 +1,4 @@
-package com.likelion.a1.user.domain.model;
+package com.likelion.a1.media.domain.model;
 
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;
@@ -7,32 +7,32 @@ import lombok.*;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@Table(name = "auth_sessions")
-public class AuthSession {
+@Table(name = "generated_media")
+public class GeneratedMedia {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
   @Column(nullable = false)
-  private Long userId;
+  private Long libraryId;
 
-  @Column(nullable = false, unique = true)
-  private String sessionId;
+  private Long generationJobId;
 
-  private String refreshTokenHash;
+  private Long responseMessageId;
 
-  private String ipAddress;
+  private Long parentMediaId;
+
+  private String mediaType;
+
+  private String title;
 
   @Column(columnDefinition = "text")
-  private String userAgent;
+  private String prompt;
 
   @Column(nullable = false)
-  private boolean rememberMe;
+  private boolean isSaved;
 
-  @Column(nullable = false)
-  private OffsetDateTime expiredAt;
-
-  private OffsetDateTime revokedAt;
+  private OffsetDateTime savedAt;
 
   @Column(nullable = false)
   private String status;
@@ -42,4 +42,6 @@ public class AuthSession {
 
   @Column(nullable = false)
   private OffsetDateTime updatedAt;
+
+  private OffsetDateTime deletedAt;
 }

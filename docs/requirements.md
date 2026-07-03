@@ -95,13 +95,13 @@ EXPIRED
 ```
 
 - 허용되지 않은 상태 전이는 Domain에서 차단한다.
-- 상태 변경은 `job_events`에 기록한다.
+- 생성 요청과 응답 흐름은 `library_messages` 및 `generation_jobs`에 연결해 추적한다.
 - 재시도 횟수와 다음 처리 시간을 기록한다.
 - Consumer와 polling 작업은 멱등성을 가져야 한다.
 
 ## 6. 미디어 요구사항
 
-- 생성 완료 시 `media_assets`를 생성한다.
+- 생성 완료 시 `generated_media`를 생성한다.
 - 실제 S3 파일 정보는 `storage_files`에 저장한다.
 - 원본, 썸네일, 미리보기, 업로드 원본을 구분한다.
 - 이미지 크기와 영상 길이 등 메타데이터를 저장한다.
@@ -133,7 +133,7 @@ EXPIRED
 
 - 모델 목록과 활성 여부를 `ai_models`에서 관리한다.
 - 모델별 사용량과 예상 비용을 `api_usage_logs`에 기록한다.
-- 로그인, 로그아웃, 생성, 삭제, 다운로드를 `audit_logs`에 기록한다.
+- 주요 사용자 활동 로그는 운영 로깅 정책 확정 후 별도 저장소에 기록한다.
 - 로그에 비밀번호, Token, API Key, 개인정보를 기록하지 않는다.
 - 모든 요청 로그에 Request ID를 포함한다.
 - Actuator health endpoint를 제공한다.
@@ -291,8 +291,8 @@ chore: 빌드 및 설정 변경
 - JWT 로그인과 세션 관리
 - AI 공급자 선정 및 이미지·영상 생성 연동 구현
 - OAuth 로그인
-- 생성 완료 시 `media_assets`, `storage_files` 등록
-- `job_events`, `api_usage_logs`, `audit_logs` 기록
+- 생성 완료 시 `generated_media`, `storage_files` 등록
+- 생성 작업과 라이브러리 메시지 연결
 - 미디어 라이브러리 API
 - 폴더, 태그, 즐겨찾기
 - 역프롬프트

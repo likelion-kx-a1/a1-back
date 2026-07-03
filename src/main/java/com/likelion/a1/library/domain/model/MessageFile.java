@@ -1,4 +1,4 @@
-package com.likelion.a1.media.domain.model;
+package com.likelion.a1.library.domain.model;
 
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;
@@ -7,14 +7,14 @@ import lombok.*;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@Table(name = "storage_files")
-public class StorageFile {
+@Table(name = "message_files")
+public class MessageFile {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
   @Column(nullable = false)
-  private Long generatedMediaId;
+  private Long messageId;
 
   private String fileType;
 
@@ -30,13 +30,7 @@ public class StorageFile {
   private String originalFilename;
 
   private String mimeType;
-
   private Long fileSize;
-  private Integer width;
-
-  private Integer height;
-
-  private Integer durationSeconds;
 
   @Column(nullable = false)
   private OffsetDateTime createdAt;
