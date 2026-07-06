@@ -89,7 +89,7 @@ docker run -d \
   -e SPRING_PROFILES_ACTIVE=prod \
   -e REDIS_HOST="${REDIS_CONTAINER_NAME}" \
   -e REDIS_PORT=6379 \
-  -p 8080:8080 \
+  -p 127.0.0.1:8080:8080 \
   "${IMAGE_URI}"
 
 log "애플리케이션 상태 확인"
