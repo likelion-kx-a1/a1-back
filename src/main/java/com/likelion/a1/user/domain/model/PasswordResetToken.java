@@ -7,8 +7,8 @@ import lombok.*;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@Table(name = "auth_sessions")
-public class AuthSession {
+@Table(name = "password_reset_tokens")
+public class PasswordResetToken {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
@@ -16,29 +16,14 @@ public class AuthSession {
   @Column(nullable = false)
   private Long userId;
 
-  @Column(nullable = false, unique = true)
-  private String sessionId;
-
   @Column(nullable = false)
-  private String refreshTokenHash;
-
-  @Column(length = 50)
-  private String ipAddress;
-
-  @Column(columnDefinition = "text")
-  private String userAgent;
+  private String resetTokenHash;
 
   @Column(nullable = false)
   private OffsetDateTime expiredAt;
 
-  private OffsetDateTime revokedAt;
-
-  @Column(nullable = false, length = 30)
-  private String status = "ACTIVE";
+  private OffsetDateTime usedAt;
 
   @Column(nullable = false)
   private OffsetDateTime createdAt;
-
-  @Column(nullable = false)
-  private OffsetDateTime updatedAt;
 }

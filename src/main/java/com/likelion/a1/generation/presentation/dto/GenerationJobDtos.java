@@ -7,10 +7,9 @@ public final class GenerationJobDtos {
   private GenerationJobDtos() {}
 
   public record CreateRequest(
-      Long userId,
-      Long libraryId,
+      Long chatId,
+      Long aiModelId,
       Long requestMessageId,
-      String modelName,
       String jobType,
       String prompt,
       Map<String, Object> requestPayload) {}
@@ -18,12 +17,33 @@ public final class GenerationJobDtos {
   public record Response(
       Long id,
       Long userId,
-      Long libraryId,
+      Long chatId,
+      Long aiModelId,
       Long requestMessageId,
-      String modelName,
       String jobType,
       String prompt,
       String status,
       String errorMessage,
+      OffsetDateTime startedAt,
+      OffsetDateTime completedAt,
       OffsetDateTime createdAt) {}
+
+  public record AiModelResponse(
+      Long id,
+      String name,
+      String provider,
+      String modelCode,
+      String modelType,
+      String description,
+      boolean active) {}
+
+  public record QueueResponse(
+      Long id,
+      Long generationJobId,
+      int priority,
+      String status,
+      int retryCount,
+      int maxRetryCount,
+      OffsetDateTime availableAt,
+      OffsetDateTime lockedAt) {}
 }

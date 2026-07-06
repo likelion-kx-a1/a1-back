@@ -1,4 +1,4 @@
-package com.likelion.a1.library.domain.model;
+package com.likelion.a1.chat.domain.model;
 
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;
@@ -16,9 +16,10 @@ public class MessageFile {
   @Column(nullable = false)
   private Long messageId;
 
+  @Column(length = 30)
   private String fileType;
 
-  @Column(nullable = false)
+  @Column(nullable = false, length = 100)
   private String bucketName;
 
   @Column(nullable = false, columnDefinition = "text")
@@ -28,9 +29,15 @@ public class MessageFile {
   private String publicUrl;
 
   private String originalFilename;
+  private String storedFilename;
 
+  @Column(length = 100)
   private String mimeType;
+
   private Long fileSize;
+  private Integer width;
+  private Integer height;
+  private Integer durationSeconds;
 
   @Column(nullable = false)
   private OffsetDateTime createdAt;

@@ -1,22 +1,23 @@
-package com.likelion.a1.library.presentation.dto;
+package com.likelion.a1.chat.presentation.dto;
 
 import java.time.OffsetDateTime;
 
-public final class LibraryDtos {
-  private LibraryDtos() {}
+public final class ChatDtos {
+  private ChatDtos() {}
 
-  public record CreateLibraryRequest(Long projectId, String name, String description) {}
+  public record CreateChatRequest(Long projectId, String title) {}
 
-  public record LibraryResponse(
+  public record ChatResponse(
       Long id,
+      Long userId,
       Long projectId,
-      String name,
-      String description,
+      String title,
+      Long firstMessageId,
+      boolean generating,
       String status,
       OffsetDateTime createdAt) {}
 
   public record CreateMessageRequest(
-      Long userId,
       String senderType,
       String messageType,
       String contentText,
@@ -24,7 +25,7 @@ public final class LibraryDtos {
 
   public record MessageResponse(
       Long id,
-      Long libraryId,
+      Long chatId,
       Long userId,
       String senderType,
       String messageType,
@@ -32,15 +33,19 @@ public final class LibraryDtos {
       Long parentMessageId,
       Long generationJobId,
       int sortOrder,
-      String status) {}
+      String status,
+      OffsetDateTime createdAt) {}
 
   public record MessageFileResponse(
       Long id,
       Long messageId,
       String fileType,
-      String bucketName,
-      String storagePath,
       String publicUrl,
+      String originalFilename,
+      String storedFilename,
       String mimeType,
-      Long fileSize) {}
+      Long fileSize,
+      Integer width,
+      Integer height,
+      Integer durationSeconds) {}
 }
