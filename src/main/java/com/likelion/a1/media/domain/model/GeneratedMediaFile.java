@@ -1,5 +1,4 @@
 package com.likelion.a1.media.domain.model;
-//실제 파일 저장위치
 
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;
@@ -8,8 +7,8 @@ import lombok.*;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@Table(name = "storage_files")
-public class StorageFile {
+@Table(name = "generated_media_files")
+public class GeneratedMediaFile {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
@@ -17,9 +16,10 @@ public class StorageFile {
   @Column(nullable = false)
   private Long generatedMediaId;
 
+  @Column(length = 30)
   private String fileType;
 
-  @Column(nullable = false)
+  @Column(nullable = false, length = 100)
   private String bucketName;
 
   @Column(nullable = false, columnDefinition = "text")
@@ -29,14 +29,14 @@ public class StorageFile {
   private String publicUrl;
 
   private String originalFilename;
+  private String storedFilename;
 
+  @Column(length = 100)
   private String mimeType;
 
   private Long fileSize;
   private Integer width;
-
   private Integer height;
-
   private Integer durationSeconds;
 
   @Column(nullable = false)

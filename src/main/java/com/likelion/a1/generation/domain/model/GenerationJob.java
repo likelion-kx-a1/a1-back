@@ -20,11 +20,12 @@ public class GenerationJob {
   private Long userId;
 
   @Column(nullable = false)
-  private Long libraryId;
+  private Long chatId;
 
+  private Long aiModelId;
   private Long requestMessageId;
-  private String modelName;
 
+  @Column(nullable = false, length = 50)
   private String jobType;
 
   @Column(columnDefinition = "text")
@@ -38,13 +39,13 @@ public class GenerationJob {
   @Column(columnDefinition = "jsonb")
   private Map<String, Object> responsePayload;
 
-  private String status;
+  @Column(nullable = false, length = 30)
+  private String status = "PENDING";
 
   @Column(columnDefinition = "text")
   private String errorMessage;
 
   private OffsetDateTime startedAt;
-
   private OffsetDateTime completedAt;
 
   @Column(nullable = false)

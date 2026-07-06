@@ -1,6 +1,7 @@
 package com.likelion.a1.user.domain.model;
 
 import jakarta.persistence.*;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import lombok.*;
 
@@ -13,6 +14,9 @@ public class User {
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
+  @Column(nullable = false, unique = true, length = 100)
+  private String loginId;
+
   @Column(nullable = false, unique = true)
   private String email;
 
@@ -20,41 +24,57 @@ public class User {
   private String passwordHash;
 
   @Column(nullable = false, length = 100)
-  private String nickname;
+  private String name;
+
+  @Column(nullable = false)
+  private LocalDate birthDate;
+
+  @Column(nullable = false, length = 30)
+  private String phoneNumber;
 
   @Column(columnDefinition = "text")
   private String profileImageUrl;
 
   @Column(nullable = false, length = 30)
-  private String role;
+  private String role = "USER";
 
   @Column(nullable = false, length = 30)
-  private String status;
+  private String accountStatus = "INACTIVE";
+
+  @Column(nullable = false, length = 30)
+  private String approvalStatus = "PENDING";
+
+  private Long approvedBy;
+  private OffsetDateTime approvedAt;
+  private OffsetDateTime rejectedAt;
+
+  @Column(columnDefinition = "text")
+  private String rejectionReason;
 
   @Column(nullable = false)
   private int loginCount;
 
-  private OffsetDateTime approvedAt;
-
   private OffsetDateTime lastLoginAt;
-
   private OffsetDateTime lastLogoutAt;
 
   @Column(nullable = false)
   private OffsetDateTime createdAt;
 
+  @Column(nullable = false)
+  private OffsetDateTime updatedAt;
+
   private OffsetDateTime deletedAt;
 
-  private User(String email, String passwordHash, String nickname) {
+  private User(String email, String passwordHash, String name) {
+    this.loginId = email.trim().toLowerCase();
     this.email = email.trim().toLowerCase();
     this.passwordHash = passwordHash;
-    this.nickname = nickname;
-    this.role = "USER";
-    this.status = "PENDING";
+    this.name = name;
     this.createdAt = OffsetDateTime.now();
+    this.updatedAt = this.createdAt;
   }
 
-  public static User local(String email, String passwordHash, String nickname) {
-    return new User(email, passwordHash, nickname);
+  public static User local(String email, String passwordHash, String name) {
+    return new User(email, passwordHash, name);
   }
 }

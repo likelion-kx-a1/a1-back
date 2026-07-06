@@ -1,5 +1,5 @@
 package com.likelion.a1.media.domain.model;
-//ai생성물
+
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;
 import lombok.*;
@@ -14,14 +14,16 @@ public class GeneratedMedia {
   private Long id;
 
   @Column(nullable = false)
-  private Long libraryId;
+  private Long userId;
+
+  @Column(nullable = false)
+  private Long chatId;
 
   private Long generationJobId;
-
   private Long responseMessageId;
-
   private Long parentMediaId;
 
+  @Column(nullable = false, length = 20)
   private String mediaType;
 
   private String title;
@@ -29,13 +31,8 @@ public class GeneratedMedia {
   @Column(columnDefinition = "text")
   private String prompt;
 
-  @Column(nullable = false)
-  private boolean isSaved;
-
-  private OffsetDateTime savedAt;
-
-  @Column(nullable = false)
-  private String status;
+  @Column(nullable = false, length = 30)
+  private String status = "ACTIVE";
 
   @Column(nullable = false)
   private OffsetDateTime createdAt;
