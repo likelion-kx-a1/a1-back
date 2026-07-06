@@ -1,4 +1,4 @@
-package com.likelion.a1.user.domain.model;
+package com.likelion.a1.media.domain.model;
 
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;
@@ -7,8 +7,8 @@ import lombok.*;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@Table(name = "auth_sessions")
-public class AuthSession {
+@Table(name = "saved_folders")
+public class SavedFolder {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
@@ -16,22 +16,11 @@ public class AuthSession {
   @Column(nullable = false)
   private Long userId;
 
-  @Column(nullable = false, unique = true)
-  private String sessionId;
+  private Long projectId;
+  private Long parentFolderId;
 
-  @Column(nullable = false)
-  private String refreshTokenHash;
-
-  @Column(length = 50)
-  private String ipAddress;
-
-  @Column(columnDefinition = "text")
-  private String userAgent;
-
-  @Column(nullable = false)
-  private OffsetDateTime expiredAt;
-
-  private OffsetDateTime revokedAt;
+  @Column(nullable = false, length = 150)
+  private String name;
 
   @Column(nullable = false, length = 30)
   private String status = "ACTIVE";
@@ -41,4 +30,6 @@ public class AuthSession {
 
   @Column(nullable = false)
   private OffsetDateTime updatedAt;
+
+  private OffsetDateTime deletedAt;
 }
