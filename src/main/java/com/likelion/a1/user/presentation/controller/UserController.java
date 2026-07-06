@@ -1,0 +1,27 @@
+package com.likelion.a1.user.presentation.controller;
+
+import com.likelion.a1.global.response.ApiResponse;
+import com.likelion.a1.user.application.service.UserCommandService;
+import com.likelion.a1.user.domain.model.User;
+import com.likelion.a1.user.presentation.dto.RegisterUserRequest;
+import com.likelion.a1.user.presentation.dto.UserResponse;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/v1/users")
+public class UserController {
+  private final UserCommandService service;
+
+  public UserController(UserCommandService service) {
+    this.service = service;
+  }
+
+  @PostMapping
+  @ResponseStatus(HttpStatus.CREATED)
+  ApiResponse<UserResponse> register(@Valid @RequestBody RegisterUserRequest request) {
+    User user = service.register(request.email(), request.password(), request.nickname());
+    return ApiResponse.success(UserResponse.from(user));
+  }
+}
