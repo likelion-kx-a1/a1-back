@@ -1,4 +1,4 @@
-name: Deploy to Amazon EC2 with Docker
+name: Deploy to EC2
 
 on:
   workflow_run:
@@ -8,97 +8,43 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 env:
   AWS_REGION: ap-northeast-2
-  ECR_REPOSITORY: a1-back-prod
-  EC2_NAME_TAG: a1-back-prod
+  ECR_REPOSITORY: a1-back
 
 jobs:
   deploy:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout successful revision
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
+      - id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-
       - name: Build and push image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
         run: |
           docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
-          docker tag "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
-            "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
           docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
-
       - name: Deploy through SSM
         env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
         run: |
-          DEPLOY_SCRIPT_BASE64="$(base64 -w 0 deploy.sh)"
-          PARAMETERS="$(jq -cn \
-            --arg script "$DEPLOY_SCRIPT_BASE64" \
-            --arg image_tag "$IMAGE_TAG" \
-            '{commands:[
-              "echo \u0027" + $script + "\u0027 | base64 -d > /home/ec2-user/deploy.sh",
-              "chmod +x /home/ec2-user/deploy.sh",
-              "/home/ec2-user/deploy.sh \u0027" + $image_tag + "\u0027"
-            ]}')"
-
           COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${{ secrets.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --targets "Key=tag:Name,Values=$EC2_NAME_TAG" \
-            --parameters "$PARAMETERS" \
-            --comment "Deploying a1-back image $IMAGE_TAG" \
+            --parameters commands="cd /opt/a1-back && export ECR_REGISTRY=$ECR_REGISTRY ECR_REPOSITORY=$ECR_REPOSITORY IMAGE_TAG=$IMAGE_TAG && aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY && docker compose -f compose.prod.yml pull && docker compose -f compose.prod.yml up -d --remove-orphans" \
             --query 'Command.CommandId' --output text)
-
-          for attempt in {1..60}; do
-            STATUS="$(aws ssm list-command-invocations \
-              --command-id "$COMMAND_ID" \
-              --details \
-              --query 'CommandInvocations[0].Status' \
-              --output text)"
-
-            case "$STATUS" in
-              Success)
-                echo "Deployment completed successfully."
-                exit 0
-                ;;
-              Failed|Cancelled|TimedOut|Cancelling)
-                aws ssm list-command-invocations \
-                  --command-id "$COMMAND_ID" \
-                  --details
-                exit 1
-                ;;
-              None|"")
-                echo "Waiting for the SSM target..."
-                ;;
-              *)
-                echo "Deployment status: $STATUS"
-                ;;
-            esac
-
-            sleep 5
-          done
-
-          echo "Deployment timed out."
-          aws ssm list-command-invocations \
+          aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \
-            --details
-          exit 1
+            --instance-id "${{ secrets.EC2_INSTANCE_ID }}"
