@@ -1,4 +1,5 @@
 package com.likelion.a1.media.domain.model;
+//실제 파일 저장위치
 
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;

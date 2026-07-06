@@ -1,5 +1,5 @@
 package com.likelion.a1.media.domain.model;
-
+//ai생성물
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;
 import lombok.*;
