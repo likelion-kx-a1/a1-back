@@ -7,4 +7,8 @@ public record ApiResponse<T>(
   public static <T> ApiResponse<T> success(T data) {
     return new ApiResponse<>(true, "SUCCESS", "요청이 성공했습니다.", data, OffsetDateTime.now());
   }
+
+  public static <T> ApiResponse<T> success(String code, String message, T data) {
+    return new ApiResponse<>(true, code, message, data, OffsetDateTime.now());
+  }
 }
