@@ -20,3 +20,7 @@ app:
     public-base-url:
     endpoint:
     path-style-access: false
+  jwt:
+    secret: test-secret-key-must-be-at-least-32-bytes
+    access-token-expiration-seconds: 3600
+    refresh-token-expiration-days: 14
