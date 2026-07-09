@@ -7,8 +7,8 @@ import lombok.*;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@Table(name = "saved_folders")
-public class SavedFolder {
+@Table(name = "generated_assets")
+public class GeneratedAsset {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
@@ -16,11 +16,23 @@ public class SavedFolder {
   @Column(nullable = false)
   private Long userId;
 
-  private Long projectId;
-  private Long parentFolderId;
+  @Column(nullable = false)
+  private Long chatId;
 
-  @Column(nullable = false, length = 150)
-  private String name;
+  private Long generationJobId;
+  private Long responseMessageId;
+  private Long parentAssetId;
+
+  @Column(nullable = false, length = 20)
+  private String assetType;
+
+  @Column(length = 30)
+  private String imageCategory;
+
+  private String title;
+
+  @Column(columnDefinition = "text")
+  private String prompt;
 
   @Column(nullable = false, length = 30)
   private String status = "ACTIVE";

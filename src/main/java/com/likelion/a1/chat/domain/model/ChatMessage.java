@@ -29,6 +29,7 @@ public class ChatMessage {
 
   private Long parentMessageId;
   private Long generationJobId;
+  private Long generatedAssetId;
 
   @Column(nullable = false)
   private int sortOrder;
