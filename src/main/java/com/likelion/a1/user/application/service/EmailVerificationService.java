@@ -2,10 +2,14 @@ package com.likelion.a1.user.application.service;
 
 import com.likelion.a1.global.exception.BusinessException;
 import com.likelion.a1.global.exception.ErrorCode;
+import com.likelion.a1.user.application.port.out.EmailSenderPort;
 import com.likelion.a1.user.domain.model.EmailVerification;
 import com.likelion.a1.user.domain.repository.EmailVerificationRepository;
 import com.likelion.a1.user.infrastructure.security.TokenHashService;
-import com.likelion.a1.user.presentation.dto.AuthDtos.*;
+import com.likelion.a1.user.presentation.dto.AuthDtos.EmailSendRequest;
+import com.likelion.a1.user.presentation.dto.AuthDtos.EmailSendResponse;
+import com.likelion.a1.user.presentation.dto.AuthDtos.EmailVerifyRequest;
+import com.likelion.a1.user.presentation.dto.AuthDtos.EmailVerifyResponse;
 import java.time.OffsetDateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,11 +17,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
-    인증번호 생성
-    인증번호 hash 저장
-    인증번호 검증
-    회원가입 전에 인증 완료 여부 확인
-    비밀번호 재설정 전에 인증 완료 여부 확인
+ * 이메일 인증번호 생성, 저장, 발송, 검증을 담당한다.
+ *
+ * <p>인증번호 원문은 DB에 저장하지 않고 SHA-256 해시만 저장한다.
  */
 @Service
 public class EmailVerificationService {
@@ -26,12 +28,15 @@ public class EmailVerificationService {
 
   private final EmailVerificationRepository emailVerificationRepository;
   private final TokenHashService tokenHashService;
+  private final EmailSenderPort emailSenderPort;
 
   public EmailVerificationService(
       EmailVerificationRepository emailVerificationRepository,
-      TokenHashService tokenHashService) {
+      TokenHashService tokenHashService,
+      EmailSenderPort emailSenderPort) {
     this.emailVerificationRepository = emailVerificationRepository;
     this.tokenHashService = tokenHashService;
+    this.emailSenderPort = emailSenderPort;
   }
 
   @Transactional
@@ -45,11 +50,12 @@ public class EmailVerificationService {
 
     emailVerificationRepository.save(verification);
 
+    emailSenderPort.sendVerificationCode(request.email(), request.purpose(), code);
+
     log.info(
-        "Email verification code. email={}, purpose={}, code={}",
+        "Email verification code sent. email={}, purpose={}",
         request.email(),
-        request.purpose(),
-        code);
+        request.purpose());
 
     return new EmailSendResponse(expiredAt);
   }
