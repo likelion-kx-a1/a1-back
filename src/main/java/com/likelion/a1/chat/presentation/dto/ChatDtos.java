@@ -5,13 +5,16 @@ import java.time.OffsetDateTime;
 public final class ChatDtos {
   private ChatDtos() {}
 
-  public record CreateChatRequest(Long projectId, String title) {}
+  public record CreateChatRequest(
+      Long projectId, String title, String generationType, String imageCategory) {}
 
   public record ChatResponse(
       Long id,
       Long userId,
       Long projectId,
       String title,
+      String generationType,
+      String imageCategory,
       Long firstMessageId,
       boolean generating,
       String status,
@@ -32,6 +35,7 @@ public final class ChatDtos {
       String contentText,
       Long parentMessageId,
       Long generationJobId,
+      Long generatedAssetId,
       int sortOrder,
       String status,
       OffsetDateTime createdAt) {}

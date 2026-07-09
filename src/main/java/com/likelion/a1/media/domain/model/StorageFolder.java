@@ -7,8 +7,8 @@ import lombok.*;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@Table(name = "generated_media")
-public class GeneratedMedia {
+@Table(name = "storage_folders")
+public class StorageFolder {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
@@ -16,20 +16,10 @@ public class GeneratedMedia {
   @Column(nullable = false)
   private Long userId;
 
-  @Column(nullable = false)
-  private Long chatId;
+  private Long parentFolderId;
 
-  private Long generationJobId;
-  private Long responseMessageId;
-  private Long parentMediaId;
-
-  @Column(nullable = false, length = 20)
-  private String mediaType;
-
-  private String title;
-
-  @Column(columnDefinition = "text")
-  private String prompt;
+  @Column(nullable = false, length = 150)
+  private String name;
 
   @Column(nullable = false, length = 30)
   private String status = "ACTIVE";

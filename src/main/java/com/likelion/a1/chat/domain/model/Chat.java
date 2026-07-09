@@ -21,6 +21,12 @@ public class Chat {
   @Column(nullable = false)
   private String title;
 
+  @Column(nullable = false, length = 20)
+  private String generationType;
+
+  @Column(length = 30)
+  private String imageCategory;
+
   private Long firstMessageId;
 
   @Column(nullable = false)

@@ -10,7 +10,8 @@ public final class GenerationJobDtos {
       Long chatId,
       Long aiModelId,
       Long requestMessageId,
-      String jobType,
+      String generationType,
+      String imageCategory,
       String prompt,
       Map<String, Object> requestPayload) {}
 
@@ -20,7 +21,8 @@ public final class GenerationJobDtos {
       Long chatId,
       Long aiModelId,
       Long requestMessageId,
-      String jobType,
+      String generationType,
+      String imageCategory,
       String prompt,
       String status,
       String errorMessage,
