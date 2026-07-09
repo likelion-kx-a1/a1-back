@@ -32,6 +32,9 @@ spring:
       port: ${REDIS_PORT:6379}
 
 management:
+  health:
+    mail:
+      enabled: false
   endpoints:
     web:
       exposure:

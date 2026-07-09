@@ -18,6 +18,9 @@ STORAGE_BUCKET_PARAMETER="${STORAGE_BUCKET_PARAMETER:-/config/a1-back/AWS_S3_BUC
 APP_AWS_REGION_PARAMETER="${APP_AWS_REGION_PARAMETER:-/config/a1-back/AWS_REGION}"
 ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+MAIL_USERNAME_PARAMETER="${MAIL_USERNAME_PARAMETER:-/config/a1-back/MAIL_USERNAME}"
+MAIL_PASSWORD_PARAMETER="${MAIL_PASSWORD_PARAMETER:-/config/a1-back/MAIL_PASSWORD}"
+MAIL_FROM_PARAMETER="${MAIL_FROM_PARAMETER:-/config/a1-back/MAIL_FROM}"
 
 log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1"
@@ -38,7 +41,9 @@ DB_USERNAME="$(get_parameter "${DB_USERNAME_PARAMETER}")"
 DB_PASSWORD="$(get_parameter "${DB_PASSWORD_PARAMETER}")"
 STORAGE_BUCKET="$(get_parameter "${STORAGE_BUCKET_PARAMETER}")"
 APP_AWS_REGION="$(get_parameter "${APP_AWS_REGION_PARAMETER}")"
-
+MAIL_USERNAME="$(get_parameter "${MAIL_USERNAME_PARAMETER}")"
+MAIL_PASSWORD="$(get_parameter "${MAIL_PASSWORD_PARAMETER}")"
+MAIL_FROM="$(get_parameter "${MAIL_FROM_PARAMETER}")"
 install -d -m 700 "$(dirname "${ENV_FILE}")"
 umask 077
 {
@@ -50,6 +55,9 @@ umask 077
   printf 'STORAGE_PUBLIC_BASE_URL=\n'
   printf 'STORAGE_ENDPOINT=\n'
   printf 'STORAGE_PATH_STYLE_ACCESS=false\n'
+  printf 'MAIL_USERNAME=%s\n' "${MAIL_USERNAME}"
+  printf 'MAIL_PASSWORD=%s\n' "${MAIL_PASSWORD}"
+  printf 'MAIL_FROM=%s\n' "${MAIL_FROM}"
 } >"${ENV_FILE}"
 
 log "Amazon ECR 로그인"
