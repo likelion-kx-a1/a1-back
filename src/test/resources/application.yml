@@ -4,6 +4,11 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
+  mail:
+    host: localhost
+    port: 2525
+    username:
+    password:
   jpa:
     hibernate:
       ddl-auto: create-drop
@@ -20,3 +25,7 @@ app:
     public-base-url:
     endpoint:
     path-style-access: false
+  jwt:
+    secret: test-secret-key-must-be-at-least-32-bytes
+    access-token-expiration-seconds: 3600
+    refresh-token-expiration-days: 14

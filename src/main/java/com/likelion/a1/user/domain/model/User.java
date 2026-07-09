@@ -77,4 +77,52 @@ public class User {
   public static User local(String email, String passwordHash, String name) {
     return new User(email, passwordHash, name);
   }
+  public static User signup(
+    String loginId, 
+    String email, 
+    String passwordHash, 
+    String name, 
+    LocalDate birthDate, 
+    String phoneNumber
+  ) {
+    User user = new User();
+    OffsetDateTime now = OffsetDateTime.now();
+
+    user.loginId = loginId;
+    user.email = email.trim().toLowerCase();
+    user.passwordHash = passwordHash;
+    user.name = name.trim();
+    user.birthDate = birthDate;
+    user.phoneNumber = phoneNumber.trim();
+    user.role = "USER";
+    user.accountStatus = "INACTIVE";
+    user.approvalStatus = "PENDING";
+    user.loginCount = 0;
+    user.createdAt = now;
+    user.updatedAt = now;
+
+    return user;
+  }
+
+  public void recordLogin(){
+    this.loginCount++;
+    this.lastLoginAt = OffsetDateTime.now();
+    this.updatedAt = this.lastLoginAt;
+  }
+
+  public void recordLogout(){
+    this.lastLogoutAt = OffsetDateTime.now();
+    this.updatedAt = this.lastLogoutAt;
+  }
+
+  public void changePassword(String newPasswordHash) {
+    this.passwordHash = newPasswordHash;
+    this.updatedAt = OffsetDateTime.now();
+  }
+
+  public boolean isLoginAllowed() {
+    return deletedAt==null
+        && "APPROVED".equals(this.approvalStatus)
+        && "ACTIVE".equals(accountStatus);
+  }
 }
