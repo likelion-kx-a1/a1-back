@@ -2,8 +2,10 @@ package com.likelion.a1.user.infrastructure.persistence;
 
 import com.likelion.a1.user.domain.model.User;
 import com.likelion.a1.user.domain.repository.UserRepository;
-import org.springframework.stereotype.Repository;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Repository;
 
 @Repository
 public class UserRepositoryAdapter implements UserRepository {
@@ -40,5 +42,16 @@ public class UserRepositoryAdapter implements UserRepository {
   @Override
   public boolean existsByEmail(String email) {
     return repository.existsByEmailIgnoreCase(email);
+  }
+
+  @Override
+  public Page<User> findSignupRequests(Pageable pageable) {
+    return repository.findByApprovalStatusAndDeletedAtIsNullOrderByCreatedAtDesc("PENDING", pageable);
+  }
+
+  @Override
+  public Page<User> searchUsers(
+      String approvalStatus, String accountStatus, String keyword, Pageable pageable) {
+    return repository.searchUsers(approvalStatus, accountStatus, keyword, pageable);
   }
 }
