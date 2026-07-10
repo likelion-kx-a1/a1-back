@@ -48,7 +48,7 @@ public class GmailEmailSenderAdapter implements EmailSenderPort {
 
         인증번호: %s
 
-        이 인증번호는 1분 동안만 유효합니다.
+        이 인증번호는 5분 동안만 유효합니다.
         본인이 요청하지 않았다면 이 메일을 무시해주세요.
         """
         .formatted(code);
