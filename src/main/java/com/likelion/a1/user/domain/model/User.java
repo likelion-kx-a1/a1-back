@@ -120,6 +120,45 @@ public class User {
     this.updatedAt = OffsetDateTime.now();
   }
 
+  public void approve(Long adminUserId) {
+    OffsetDateTime now = OffsetDateTime.now();
+
+    this.approvalStatus = "APPROVED";
+    this.accountStatus = "ACTIVE";
+    this.approvedBy = adminUserId;
+    this.approvedAt = now;
+    this.rejectedAt = null;
+    this.rejectionReason = null;
+    this.updatedAt = now;
+  }
+
+  public void reject(String reason) {
+    OffsetDateTime now = OffsetDateTime.now();
+
+    this.approvalStatus = "REJECTED";
+    this.accountStatus = "INACTIVE";
+    this.rejectedAt = now;
+    this.rejectionReason = reason;
+    this.updatedAt = now;
+  }
+
+  public void changeAccountStatus(String accountStatus) {
+    this.accountStatus = accountStatus;
+    this.updatedAt = OffsetDateTime.now();
+  }
+
+  public void delete() {
+    OffsetDateTime now = OffsetDateTime.now();
+
+    this.accountStatus = "INACTIVE";
+    this.deletedAt = now;
+    this.updatedAt = now;
+  }
+
+  public boolean isDeleted() {
+    return this.deletedAt != null;
+  }
+
   public boolean isLoginAllowed() {
     return deletedAt==null
         && "APPROVED".equals(this.approvalStatus)
