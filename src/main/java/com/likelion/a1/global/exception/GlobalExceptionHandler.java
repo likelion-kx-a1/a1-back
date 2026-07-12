@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.client.RestClientResponseException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -21,5 +22,13 @@ public class GlobalExceptionHandler {
             .map(error -> error.getField() + ": " + error.getDefaultMessage())
             .toList();
     return ResponseEntity.badRequest().body(ErrorResponse.of(ErrorCode.INVALID_INPUT, details));
+  }
+
+  @ExceptionHandler(RestClientResponseException.class)
+  ResponseEntity<ErrorResponse> handleAiProviderFailure(RestClientResponseException exception) {
+    ErrorCode code = ErrorCode.AI_PROVIDER_REQUEST_FAILED;
+    List<String> details =
+        List.of(exception.getStatusCode() + ": " + exception.getResponseBodyAsString());
+    return ResponseEntity.status(code.status()).body(ErrorResponse.of(code, details));
   }
 }
