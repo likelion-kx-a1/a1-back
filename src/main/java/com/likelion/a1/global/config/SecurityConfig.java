@@ -1,6 +1,7 @@
 package com.likelion.a1.global.config;
 
 import com.likelion.a1.user.infrastructure.security.JwtAuthenticationFilter;
+import java.util.Arrays;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -57,10 +58,16 @@ public class SecurityConfig {
 
   @Bean
   CorsConfigurationSource corsConfigurationSource(
-      @Value("${app.cors.allowed-origin-patterns}") List<String> allowedOriginPatterns) {
+      @Value(
+              "${app.cors.allowed-origin-patterns:http://localhost:3000,http://localhost:5173,https://*.vercel.app}")
+          String allowedOriginPatterns) {
     CorsConfiguration configuration = new CorsConfiguration();
 
-    configuration.setAllowedOriginPatterns(allowedOriginPatterns);
+    configuration.setAllowedOriginPatterns(
+        Arrays.stream(allowedOriginPatterns.split(","))
+            .map(String::trim)
+            .filter(pattern -> !pattern.isBlank())
+            .toList());
     configuration.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
     configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Origin"));
     configuration.setExposedHeaders(List.of("Authorization"));
