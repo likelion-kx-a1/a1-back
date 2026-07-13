@@ -41,4 +41,47 @@ public class ChatMessage {
 
   @Column(nullable = false)
   private OffsetDateTime updatedAt;
+
+  public static ChatMessage create(
+      Long chatId,
+      Long userId,
+      String senderType,
+      String messageType,
+      String contentText,
+      Long parentMessageId,
+      int sortOrder) {
+    ChatMessage message = new ChatMessage();
+    OffsetDateTime now = OffsetDateTime.now();
+
+    message.chatId = chatId;
+    message.userId = userId;
+    message.senderType = senderType;
+    message.messageType = messageType;
+    message.contentText = contentText;
+    message.parentMessageId = parentMessageId;
+    message.sortOrder = sortOrder;
+    message.status = "ACTIVE";
+    message.createdAt = now;
+    message.updatedAt = now;
+
+    return message;
+  }
+
+  public void updateContent(String contentText) {
+    this.contentText = contentText;
+    this.updatedAt = OffsetDateTime.now();
+  }
+
+  public void delete() {
+    this.status = "DELETED";
+    this.updatedAt = OffsetDateTime.now();
+  }
+
+  public boolean isInChat(Long chatId) {
+    return this.chatId.equals(chatId);
+  }
+
+  public boolean isDeleted() {
+    return "DELETED".equals(this.status);
+  }
 }

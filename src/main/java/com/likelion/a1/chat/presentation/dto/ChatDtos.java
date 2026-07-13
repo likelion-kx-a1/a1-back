@@ -1,32 +1,54 @@
 package com.likelion.a1.chat.presentation.dto;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.time.OffsetDateTime;
 
 public final class ChatDtos {
   private ChatDtos() {}
 
-  public record CreateChatRequest(Long projectId, String title) {}
+  public record CreateChatRequest(
+      Long projectId,
+
+      @NotBlank(message = "채팅 제목은 필수입니다.")
+      @Size(max = 255, message = "채팅 제목은 255자 이하여야 합니다.")
+      String title) {}
+
+  public record UpdateChatRequest(
+      @NotBlank(message = "채팅 제목은 필수입니다.")
+      @Size(max = 255, message = "채팅 제목은 255자 이하여야 합니다.")
+      String title) {}
 
   public record ChatResponse(
-      Long id,
-      Long userId,
+      Long chatId,
       Long projectId,
       String title,
       Long firstMessageId,
-      boolean generating,
+      boolean isGenerating,
       String status,
-      OffsetDateTime createdAt) {}
+      OffsetDateTime createdAt,
+      OffsetDateTime updatedAt) {}
 
   public record CreateMessageRequest(
+      @Pattern(regexp = "USER|ASSISTANT|SYSTEM", message = "senderType은 USER, ASSISTANT, SYSTEM만 가능합니다.")
       String senderType,
+
+      @Pattern(regexp = "TEXT|IMAGE|VIDEO|FILE", message = "messageType은 TEXT, IMAGE, VIDEO, FILE만 가능합니다.")
       String messageType,
+
+      @NotBlank(message = "메시지 내용은 필수입니다.")
       String contentText,
+
       Long parentMessageId) {}
 
+  public record UpdateMessageRequest(
+      @NotBlank(message = "메시지 내용은 필수입니다.")
+      String contentText) {}
+
   public record MessageResponse(
-      Long id,
+      Long messageId,
       Long chatId,
-      Long userId,
       String senderType,
       String messageType,
       String contentText,
@@ -34,10 +56,11 @@ public final class ChatDtos {
       Long generationJobId,
       int sortOrder,
       String status,
-      OffsetDateTime createdAt) {}
+      OffsetDateTime createdAt,
+      OffsetDateTime updatedAt) {}
 
   public record MessageFileResponse(
-      Long id,
+      Long fileId,
       Long messageId,
       String fileType,
       String publicUrl,
