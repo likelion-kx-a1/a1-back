@@ -1,6 +1,8 @@
 package com.likelion.a1.global.exception;
 
 import java.util.List;
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -30,5 +32,32 @@ public class GlobalExceptionHandler {
     List<String> details =
         List.of(exception.getStatusCode() + ": " + exception.getResponseBodyAsString());
     return ResponseEntity.status(code.status()).body(ErrorResponse.of(code, details));
+  }
+
+  @ExceptionHandler(DataIntegrityViolationException.class)
+  ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException exception) {
+    ErrorCode code = resolveConstraintErrorCode(constraintName(exception));
+    return ResponseEntity.status(code.status()).body(ErrorResponse.of(code, List.of()));
+  }
+
+  private String constraintName(DataIntegrityViolationException exception) {
+    Throwable cause = exception.getMostSpecificCause();
+    if (cause instanceof ConstraintViolationException constraintViolationException) {
+      return constraintViolationException.getConstraintName();
+    }
+    return cause.getMessage();
+  }
+
+  private ErrorCode resolveConstraintErrorCode(String constraintName) {
+    if (constraintName == null) {
+      return ErrorCode.INVALID_INPUT;
+    }
+    if (constraintName.contains("user_id")) {
+      return ErrorCode.USER_NOT_FOUND;
+    }
+    if (constraintName.contains("chat_id") || constraintName.contains("library_id")) {
+      return ErrorCode.CHAT_NOT_FOUND;
+    }
+    return ErrorCode.INVALID_INPUT;
   }
 }
