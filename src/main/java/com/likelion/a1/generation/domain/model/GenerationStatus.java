@@ -7,5 +7,14 @@ public enum GenerationStatus {
   COMPLETED,
   FAILED,
   CANCELED,
-  EXPIRED
+  EXPIRED;
+
+  public static GenerationStatus fromFalStatus(String falStatus) {
+    return switch (falStatus) {
+      case "IN_QUEUE" -> QUEUED;
+      case "IN_PROGRESS" -> PROCESSING;
+      case "COMPLETED" -> COMPLETED;
+      default -> FAILED;
+    };
+  }
 }
