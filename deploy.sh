@@ -11,16 +11,20 @@ REDIS_CONTAINER_NAME="${REDIS_CONTAINER_NAME:-a1-redis}"
 DOCKER_NETWORK="${DOCKER_NETWORK:-a1-network}"
 REDIS_VOLUME="${REDIS_VOLUME:-a1-redis-data}"
 ENV_FILE="${ENV_FILE:-/run/a1-back/a1-back.env}"
+
 DB_URL_PARAMETER="${DB_URL_PARAMETER:-/config/a1-back/SPRING_DATASOURCE_URL}"
 DB_USERNAME_PARAMETER="${DB_USERNAME_PARAMETER:-/config/a1-back/SPRING_DATASOURCE_USERNAME}"
 DB_PASSWORD_PARAMETER="${DB_PASSWORD_PARAMETER:-/config/a1-back/SPRING_DATASOURCE_PASSWORD}"
 STORAGE_BUCKET_PARAMETER="${STORAGE_BUCKET_PARAMETER:-/config/a1-back/AWS_S3_BUCKET}"
 APP_AWS_REGION_PARAMETER="${APP_AWS_REGION_PARAMETER:-/config/a1-back/AWS_REGION}"
-ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+OPENAI_API_KEY_PARAMETER="${OPENAI_API_KEY_PARAMETER:-/config/a1-back/OPEN-AI-API}"
+FAL_API_KEY_PARAMETER="${FAL_API_KEY_PARAMETER:-/config/a1-back/FAL-API}"
 MAIL_USERNAME_PARAMETER="${MAIL_USERNAME_PARAMETER:-/config/a1-back/MAIL_USERNAME}"
 MAIL_PASSWORD_PARAMETER="${MAIL_PASSWORD_PARAMETER:-/config/a1-back/MAIL_PASSWORD}"
 MAIL_FROM_PARAMETER="${MAIL_FROM_PARAMETER:-/config/a1-back/MAIL_FROM}"
+
+ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
 log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1"
@@ -35,12 +39,14 @@ get_parameter() {
     --output text
 }
 
-log "Parameter Store에서 운영 설정 조회"
+log "Load production settings from Parameter Store"
 DB_URL="$(get_parameter "${DB_URL_PARAMETER}")"
 DB_USERNAME="$(get_parameter "${DB_USERNAME_PARAMETER}")"
 DB_PASSWORD="$(get_parameter "${DB_PASSWORD_PARAMETER}")"
 STORAGE_BUCKET="$(get_parameter "${STORAGE_BUCKET_PARAMETER}")"
 APP_AWS_REGION="$(get_parameter "${APP_AWS_REGION_PARAMETER}")"
+OPENAI_API_KEY="$(get_parameter "${OPENAI_API_KEY_PARAMETER}")"
+FAL_API_KEY="$(get_parameter "${FAL_API_KEY_PARAMETER}")"
 MAIL_USERNAME="$(get_parameter "${MAIL_USERNAME_PARAMETER}")"
 MAIL_PASSWORD="$(get_parameter "${MAIL_PASSWORD_PARAMETER}")"
 MAIL_FROM="$(get_parameter "${MAIL_FROM_PARAMETER}")"
@@ -55,19 +61,21 @@ umask 077
   printf 'STORAGE_PUBLIC_BASE_URL=\n'
   printf 'STORAGE_ENDPOINT=\n'
   printf 'STORAGE_PATH_STYLE_ACCESS=false\n'
+  printf 'OPENAI_API_KEY=%s\n' "${OPENAI_API_KEY}"
+  printf 'FAL_API_KEY=%s\n' "${FAL_API_KEY}"
   printf 'MAIL_USERNAME=%s\n' "${MAIL_USERNAME}"
   printf 'MAIL_PASSWORD=%s\n' "${MAIL_PASSWORD}"
   printf 'MAIL_FROM=%s\n' "${MAIL_FROM}"
 } >"${ENV_FILE}"
 
-log "Amazon ECR 로그인"
+log "Login to Amazon ECR"
 aws ecr get-login-password --region "${AWS_REGION}" \
   | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
 
-log "이미지 다운로드: ${IMAGE_URI}"
+log "Pull image: ${IMAGE_URI}"
 docker pull "${IMAGE_URI}"
 
-log "Docker 네트워크 및 Redis 준비"
+log "Prepare Docker network and Redis"
 docker network inspect "${DOCKER_NETWORK}" >/dev/null 2>&1 \
   || docker network create "${DOCKER_NETWORK}"
 
@@ -84,11 +92,11 @@ elif [[ "$(docker inspect -f '{{.State.Running}}' "${REDIS_CONTAINER_NAME}")" !=
 fi
 
 if docker ps -aq --filter "name=^/${CONTAINER_NAME}$" | grep -q .; then
-  log "기존 컨테이너 제거: ${CONTAINER_NAME}"
+  log "Remove existing container: ${CONTAINER_NAME}"
   docker rm -f "${CONTAINER_NAME}"
 fi
 
-log "새 컨테이너 실행"
+log "Run new application container"
 docker run -d \
   --name "${CONTAINER_NAME}" \
   --restart unless-stopped \
@@ -100,25 +108,25 @@ docker run -d \
   -p 127.0.0.1:8080:8080 \
   "${IMAGE_URI}"
 
-log "애플리케이션 상태 확인"
+log "Check application health"
 for attempt in {1..30}; do
   if docker exec "${CONTAINER_NAME}" \
     wget -qO- http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
-    log "배포 완료"
+    log "Deployment completed"
     docker image prune -f
     exit 0
   fi
 
   if [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER_NAME}")" != "true" ]]; then
-    log "컨테이너가 종료되었습니다."
+    log "Application container stopped"
     docker logs "${CONTAINER_NAME}"
     exit 1
   fi
 
-  log "기동 대기 중 (${attempt}/30)"
+  log "Waiting for startup (${attempt}/30)"
   sleep 5
 done
 
-log "헬스 체크 시간 초과"
+log "Health check timeout"
 docker logs "${CONTAINER_NAME}"
 exit 1
