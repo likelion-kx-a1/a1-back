@@ -24,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class EmailVerificationService {
   private static final Logger log = LoggerFactory.getLogger(EmailVerificationService.class);
-  private static final long VERIFICATION_EXPIRATION_MINUTES = 1;
+  private static final long VERIFICATION_EXPIRATION_MINUTES = 5;
 
   private final EmailVerificationRepository emailVerificationRepository;
   private final TokenHashService tokenHashService;

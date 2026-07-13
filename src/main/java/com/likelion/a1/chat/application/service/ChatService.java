@@ -24,11 +24,12 @@ public class ChatService {
   }
 
   public ChatResponse create(Long userId, CreateChatRequest request) {
-    return create(userId, request.projectId(), request.title());
+    return create(
+        userId, request.projectId(), request.title(), request.generationType(), request.imageCategory());
   }
 
   public ChatResponse createInProject(Long userId, Long projectId, CreateChatRequest request) {
-    return create(userId, projectId, request.title());
+    return create(userId, projectId, request.title(), request.generationType(), request.imageCategory());
   }
 
   @Transactional(readOnly = true)
@@ -78,14 +79,37 @@ public class ChatService {
     return chat;
   }
 
-  private ChatResponse create(Long userId, Long projectId, String title) {
+  private ChatResponse create(
+      Long userId, Long projectId, String title, String generationType, String imageCategory) {
     if (projectId != null) {
       projectService.findOwnedProject(userId, projectId);
     }
 
-    Chat chat = Chat.create(userId, projectId, title.trim());
+    Chat chat =
+        Chat.create(
+            userId,
+            projectId,
+            title.trim(),
+            normalizeGenerationType(generationType),
+            normalizeNullable(imageCategory));
 
     return toResponse(chatRepository.save(chat));
+  }
+
+  private String normalizeGenerationType(String generationType) {
+    if (generationType == null || generationType.isBlank()) {
+      return "IMAGE";
+    }
+
+    return generationType.trim().toUpperCase();
+  }
+
+  private String normalizeNullable(String value) {
+    if (value == null || value.isBlank()) {
+      return null;
+    }
+
+    return value.trim();
   }
 
   private List<ChatResponse> toResponseList(List<Chat> chats) {
@@ -97,6 +121,8 @@ public class ChatService {
         chat.getId(),
         chat.getProjectId(),
         chat.getTitle(),
+        chat.getGenerationType(),
+        chat.getImageCategory(),
         chat.getFirstMessageId(),
         chat.isGenerating(),
         chat.getStatus(),

@@ -13,7 +13,11 @@ public final class ChatDtos {
 
       @NotBlank(message = "채팅 제목은 필수입니다.")
       @Size(max = 255, message = "채팅 제목은 255자 이하여야 합니다.")
-      String title) {}
+      String title,
+
+      String generationType,
+
+      String imageCategory) {}
 
   public record UpdateChatRequest(
       @NotBlank(message = "채팅 제목은 필수입니다.")
@@ -24,6 +28,8 @@ public final class ChatDtos {
       Long chatId,
       Long projectId,
       String title,
+      String generationType,
+      String imageCategory,
       Long firstMessageId,
       boolean isGenerating,
       String status,
@@ -54,6 +60,7 @@ public final class ChatDtos {
       String contentText,
       Long parentMessageId,
       Long generationJobId,
+      Long generatedAssetId,
       int sortOrder,
       String status,
       OffsetDateTime createdAt,

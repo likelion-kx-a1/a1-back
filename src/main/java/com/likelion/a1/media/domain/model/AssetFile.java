@@ -1,4 +1,4 @@
-package com.likelion.a1.chat.domain.model;
+package com.likelion.a1.media.domain.model;
 
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;
@@ -7,14 +7,14 @@ import lombok.*;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@Table(name = "message_files")
-public class MessageFile {
+@Table(name = "asset_files")
+public class AssetFile {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
   @Column(nullable = false)
-  private Long messageId;
+  private Long generatedAssetId;
 
   @Column(length = 30)
   private String fileType;

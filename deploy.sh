@@ -50,7 +50,6 @@ FAL_API_KEY="$(get_parameter "${FAL_API_KEY_PARAMETER}")"
 MAIL_USERNAME="$(get_parameter "${MAIL_USERNAME_PARAMETER}")"
 MAIL_PASSWORD="$(get_parameter "${MAIL_PASSWORD_PARAMETER}")"
 MAIL_FROM="$(get_parameter "${MAIL_FROM_PARAMETER}")"
-
 install -d -m 700 "$(dirname "${ENV_FILE}")"
 umask 077
 {

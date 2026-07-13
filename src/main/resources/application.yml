@@ -32,6 +32,9 @@ spring:
       port: ${REDIS_PORT:6379}
 
 management:
+  health:
+    mail:
+      enabled: false
   endpoints:
     web:
       exposure:
@@ -42,6 +45,8 @@ app:
     allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:3000,http://localhost:5173,https://*.vercel.app}
   mail:
     from: ${MAIL_FROM:${MAIL_USERNAME:}}
+  cors:
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:3000,http://localhost:5173,https://*.vercel.app}
   storage:
     region: ${AWS_REGION:ap-northeast-2}
     bucket: ${STORAGE_BUCKET:a1-media}

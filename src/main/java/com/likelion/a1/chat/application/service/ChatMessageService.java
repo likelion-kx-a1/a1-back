@@ -110,6 +110,7 @@ public class ChatMessageService {
         message.getContentText(),
         message.getParentMessageId(),
         message.getGenerationJobId(),
+        message.getGeneratedAssetId(),
         message.getSortOrder(),
         message.getStatus(),
         message.getCreatedAt(),
