@@ -1,12 +1,15 @@
 package com.likelion.a1.global.config;
 
 import com.likelion.a1.user.infrastructure.security.JwtAuthenticationFilter;
+import com.likelion.a1.user.infrastructure.security.JwtPrincipal;
 import java.util.Arrays;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -49,7 +52,9 @@ public class SecurityConfig {
                         "/api/auth/password/reset")
                     .permitAll()
                     .requestMatchers("/api/admin/**")
-                    .hasAnyAuthority("ROLE_ADMIN", "ADMIN")
+                    .access(
+                        (authentication, context) ->
+                            new AuthorizationDecision(isAdmin(authentication.get())))
                     .anyRequest()
                     .authenticated())
         .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
@@ -82,5 +87,20 @@ public class SecurityConfig {
         .map(String::trim)
         .filter(pattern -> !pattern.isBlank())
         .toList();
+  }
+
+  private static boolean isAdmin(Authentication authentication) {
+    if (authentication == null || !authentication.isAuthenticated()) {
+      return false;
+    }
+
+    Object principal = authentication.getPrincipal();
+    if (principal instanceof JwtPrincipal jwtPrincipal) {
+      return "ADMIN".equals(jwtPrincipal.role());
+    }
+
+    return authentication.getAuthorities().stream()
+        .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority())
+            || "ADMIN".equals(authority.getAuthority()));
   }
 }
