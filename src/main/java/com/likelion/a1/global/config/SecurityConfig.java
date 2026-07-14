@@ -49,7 +49,7 @@ public class SecurityConfig {
                         "/api/auth/password/reset")
                     .permitAll()
                     .requestMatchers("/api/admin/**")
-                    .hasRole("ADMIN")
+                    .hasAnyAuthority("ROLE_ADMIN", "ADMIN")
                     .anyRequest()
                     .authenticated())
         .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
