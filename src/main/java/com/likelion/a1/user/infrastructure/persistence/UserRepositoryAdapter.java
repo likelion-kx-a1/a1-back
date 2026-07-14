@@ -52,6 +52,25 @@ public class UserRepositoryAdapter implements UserRepository {
   @Override
   public Page<User> searchUsers(
       String approvalStatus, String accountStatus, String keyword, Pageable pageable) {
+    if (keyword == null) {
+      if (approvalStatus != null && accountStatus != null) {
+        return repository.findByApprovalStatusAndAccountStatusAndDeletedAtIsNullOrderByCreatedAtDesc(
+            approvalStatus, accountStatus, pageable);
+      }
+
+      if (approvalStatus != null) {
+        return repository.findByApprovalStatusAndDeletedAtIsNullOrderByCreatedAtDesc(
+            approvalStatus, pageable);
+      }
+
+      if (accountStatus != null) {
+        return repository.findByAccountStatusAndDeletedAtIsNullOrderByCreatedAtDesc(
+            accountStatus, pageable);
+      }
+
+      return repository.findByDeletedAtIsNullOrderByCreatedAtDesc(pageable);
+    }
+
     return repository.searchUsers(approvalStatus, accountStatus, keyword, pageable);
   }
 }
