@@ -20,6 +20,14 @@ interface SpringDataUserRepository extends JpaRepository<User, Long> {
   Page<User> findByApprovalStatusAndDeletedAtIsNullOrderByCreatedAtDesc(
       String approvalStatus, Pageable pageable);
 
+  Page<User> findByAccountStatusAndDeletedAtIsNullOrderByCreatedAtDesc(
+      String accountStatus, Pageable pageable);
+
+  Page<User> findByApprovalStatusAndAccountStatusAndDeletedAtIsNullOrderByCreatedAtDesc(
+      String approvalStatus, String accountStatus, Pageable pageable);
+
+  Page<User> findByDeletedAtIsNullOrderByCreatedAtDesc(Pageable pageable);
+
   @Query(
       """
       SELECT u
