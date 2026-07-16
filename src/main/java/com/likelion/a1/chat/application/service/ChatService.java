@@ -1,14 +1,23 @@
 package com.likelion.a1.chat.application.service;
 
 import com.likelion.a1.chat.domain.model.Chat;
+import com.likelion.a1.chat.domain.model.ChatMessage;
+import com.likelion.a1.chat.domain.model.ChatMessageFile;
+import com.likelion.a1.chat.domain.repository.ChatMessageFileRepository;
+import com.likelion.a1.chat.domain.repository.ChatMessageRepository;
 import com.likelion.a1.chat.domain.repository.ChatRepository;
+import com.likelion.a1.chat.presentation.dto.ChatDtos.ChatDetailResponse;
 import com.likelion.a1.chat.presentation.dto.ChatDtos.ChatResponse;
 import com.likelion.a1.chat.presentation.dto.ChatDtos.CreateChatRequest;
+import com.likelion.a1.chat.presentation.dto.ChatDtos.MessageFileResponse;
+import com.likelion.a1.chat.presentation.dto.ChatDtos.MessageResponse;
 import com.likelion.a1.chat.presentation.dto.ChatDtos.UpdateChatRequest;
 import com.likelion.a1.global.exception.BusinessException;
 import com.likelion.a1.global.exception.ErrorCode;
 import com.likelion.a1.project.application.service.ProjectService;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,10 +25,18 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class ChatService {
   private final ChatRepository chatRepository;
+  private final ChatMessageRepository messageRepository;
+  private final ChatMessageFileRepository fileRepository;
   private final ProjectService projectService;
 
-  public ChatService(ChatRepository chatRepository, ProjectService projectService) {
+  public ChatService(
+      ChatRepository chatRepository,
+      ChatMessageRepository messageRepository,
+      ChatMessageFileRepository fileRepository,
+      ProjectService projectService) {
     this.chatRepository = chatRepository;
+    this.messageRepository = messageRepository;
+    this.fileRepository = fileRepository;
     this.projectService = projectService;
   }
 
@@ -50,6 +67,30 @@ public class ChatService {
   @Transactional(readOnly = true)
   public ChatResponse getChat(Long userId, Long chatId) {
     return toResponse(findOwnedChat(userId, chatId));
+  }
+
+  @Transactional(readOnly = true)
+  public ChatDetailResponse getChatDetail(Long userId, Long chatId) {
+    Chat chat = findOwnedChat(userId, chatId);
+    List<ChatMessage> messages = messageRepository.findActiveByChatId(chatId);
+    Map<Long, List<ChatMessageFile>> filesByMessageId =
+        fileRepository.findByMessageIds(messages.stream().map(ChatMessage::getId).toList()).stream()
+            .collect(Collectors.groupingBy(ChatMessageFile::getMessageId));
+
+    return new ChatDetailResponse(
+        chat.getId(),
+        chat.getProjectId(),
+        chat.getTitle(),
+        chat.getGenerationType(),
+        chat.getImageCategory(),
+        chat.getFirstMessageId(),
+        chat.isGenerating(),
+        chat.getStatus(),
+        messages.stream()
+            .map(message -> toMessageResponse(message, filesByMessageId.getOrDefault(message.getId(), List.of())))
+            .toList(),
+        chat.getCreatedAt(),
+        chat.getUpdatedAt());
   }
 
   public ChatResponse update(Long userId, Long chatId, UpdateChatRequest request) {
@@ -128,5 +169,42 @@ public class ChatService {
         chat.getStatus(),
         chat.getCreatedAt(),
         chat.getUpdatedAt());
+  }
+
+  private MessageResponse toMessageResponse(ChatMessage message, List<ChatMessageFile> files) {
+    return new MessageResponse(
+        message.getId(),
+        message.getChatId(),
+        message.getSenderType(),
+        message.getMessageType(),
+        message.getContentText(),
+        message.getGenerationType(),
+        message.getImageCategory(),
+        message.getParentMessageId(),
+        message.getGenerationJobId(),
+        message.getGeneratedAssetId(),
+        message.getSortOrder(),
+        message.getStatus(),
+        files.stream().map(this::toFileResponse).toList(),
+        message.getCreatedAt(),
+        message.getUpdatedAt());
+  }
+
+  private MessageFileResponse toFileResponse(ChatMessageFile file) {
+    return new MessageFileResponse(
+        file.getId(),
+        file.getMessageId(),
+        file.getFileType(),
+        file.getBucketName(),
+        file.getStoragePath(),
+        file.getPublicUrl(),
+        file.getOriginalFilename(),
+        file.getStoredFilename(),
+        file.getMimeType(),
+        file.getFileSize(),
+        file.getWidth(),
+        file.getHeight(),
+        file.getDurationSeconds(),
+        file.getCreatedAt());
   }
 }

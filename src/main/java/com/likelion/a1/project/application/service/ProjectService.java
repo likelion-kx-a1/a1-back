@@ -1,5 +1,7 @@
 package com.likelion.a1.project.application.service;
 
+import com.likelion.a1.chat.domain.model.Chat;
+import com.likelion.a1.chat.domain.repository.ChatRepository;
 import com.likelion.a1.global.exception.BusinessException;
 import com.likelion.a1.global.exception.ErrorCode;
 import com.likelion.a1.project.domain.model.Project;
@@ -15,15 +17,23 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class ProjectService {
   private final ProjectRepository projectRepository;
+  private final ChatRepository chatRepository;
 
-  public ProjectService(ProjectRepository projectRepository) {
+  public ProjectService(ProjectRepository projectRepository, ChatRepository chatRepository) {
     this.projectRepository = projectRepository;
+    this.chatRepository = chatRepository;
   }
 
   public Response create(Long userId, CreateRequest request) {
     Project project = Project.create(userId, request.name().trim(), request.description());
+    Project savedProject = projectRepository.save(project);
 
-    return toResponse(projectRepository.save(project));
+    Chat defaultChat =
+        Chat.create(userId, savedProject.getId(), savedProject.getName(), "IMAGE", null);
+
+    Chat savedChat = chatRepository.save(defaultChat);
+
+    return toResponse(savedProject, savedChat.getId());
   }
 
   @Transactional(readOnly = true)
@@ -64,11 +74,22 @@ public class ProjectService {
   }
 
   private Response toResponse(Project project) {
+    Long defaultChatId =
+        chatRepository
+            .findFirstActiveByUserIdAndProjectId(project.getUserId(), project.getId())
+            .map(Chat::getId)
+            .orElse(null);
+
+    return toResponse(project, defaultChatId);
+  }
+
+  private Response toResponse(Project project, Long defaultChatId) {
     return new Response(
         project.getId(),
         project.getName(),
         project.getDescription(),
         project.getStatus(),
+        defaultChatId,
         project.getCreatedAt(),
         project.getUpdatedAt());
   }

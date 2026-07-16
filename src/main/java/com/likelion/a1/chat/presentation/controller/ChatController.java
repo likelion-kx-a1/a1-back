@@ -1,6 +1,7 @@
 package com.likelion.a1.chat.presentation.controller;
 
 import com.likelion.a1.chat.application.service.ChatService;
+import com.likelion.a1.chat.presentation.dto.ChatDtos.ChatDetailResponse;
 import com.likelion.a1.chat.presentation.dto.ChatDtos.ChatResponse;
 import com.likelion.a1.chat.presentation.dto.ChatDtos.CreateChatRequest;
 import com.likelion.a1.chat.presentation.dto.ChatDtos.UpdateChatRequest;
@@ -31,7 +32,7 @@ public class ChatController {
       @AuthenticationPrincipal JwtPrincipal principal, @Valid @RequestBody CreateChatRequest request) {
     return ApiResponse.success(
         "CHAT_CREATED",
-        "채팅이 생성되었습니다.",
+        "채팅방이 생성되었습니다.",
         chatService.create(principal.userId(), request));
   }
 
@@ -42,7 +43,7 @@ public class ChatController {
       @Valid @RequestBody CreateChatRequest request) {
     return ApiResponse.success(
         "CHAT_CREATED",
-        "채팅이 생성되었습니다.",
+        "채팅방이 생성되었습니다.",
         chatService.createInProject(principal.userId(), projectId, request));
   }
 
@@ -53,7 +54,7 @@ public class ChatController {
       @RequestParam(required = false) Boolean outsideProject) {
     return ApiResponse.success(
         "CHATS_FETCHED",
-        "채팅 목록을 조회했습니다.",
+        "채팅방 목록을 조회했습니다.",
         chatService.getChats(principal.userId(), projectId, outsideProject));
   }
 
@@ -62,7 +63,7 @@ public class ChatController {
       @AuthenticationPrincipal JwtPrincipal principal) {
     return ApiResponse.success(
         "CHATS_FETCHED",
-        "채팅 목록을 조회했습니다.",
+        "프로젝트 밖 채팅방 목록을 조회했습니다.",
         chatService.getChats(principal.userId(), null, true));
   }
 
@@ -71,15 +72,15 @@ public class ChatController {
       @AuthenticationPrincipal JwtPrincipal principal, @PathVariable Long projectId) {
     return ApiResponse.success(
         "CHATS_FETCHED",
-        "채팅 목록을 조회했습니다.",
+        "프로젝트 채팅방 목록을 조회했습니다.",
         chatService.getChats(principal.userId(), projectId, false));
   }
 
   @GetMapping("/api/chats/{chatId}")
-  public ApiResponse<ChatResponse> getChat(
+  public ApiResponse<ChatDetailResponse> getChat(
       @AuthenticationPrincipal JwtPrincipal principal, @PathVariable Long chatId) {
     return ApiResponse.success(
-        "CHAT_FETCHED", "채팅 상세입니다.", chatService.getChat(principal.userId(), chatId));
+        "CHAT_FETCHED", "채팅방 상세를 조회했습니다.", chatService.getChatDetail(principal.userId(), chatId));
   }
 
   @PatchMapping("/api/chats/{chatId}")
@@ -89,7 +90,7 @@ public class ChatController {
       @Valid @RequestBody UpdateChatRequest request) {
     return ApiResponse.success(
         "CHAT_UPDATED",
-        "채팅 제목이 수정되었습니다.",
+        "채팅방 제목이 수정되었습니다.",
         chatService.update(principal.userId(), chatId, request));
   }
 
@@ -98,6 +99,6 @@ public class ChatController {
       @AuthenticationPrincipal JwtPrincipal principal, @PathVariable Long chatId) {
     chatService.delete(principal.userId(), chatId);
 
-    return ApiResponse.success("CHAT_DELETED", "채팅이 삭제되었습니다.", null);
+    return ApiResponse.success("CHAT_DELETED", "채팅방이 삭제되었습니다.", null);
   }
 }

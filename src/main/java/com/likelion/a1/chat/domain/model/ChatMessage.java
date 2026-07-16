@@ -27,6 +27,12 @@ public class ChatMessage {
   @Column(columnDefinition = "text")
   private String contentText;
 
+  @Column(length = 20)
+  private String generationType;
+
+  @Column(length = 30)
+  private String imageCategory;
+
   private Long parentMessageId;
   private Long generationJobId;
   private Long generatedAssetId;
@@ -49,6 +55,8 @@ public class ChatMessage {
       String senderType,
       String messageType,
       String contentText,
+      String generationType,
+      String imageCategory,
       Long parentMessageId,
       int sortOrder) {
     ChatMessage message = new ChatMessage();
@@ -59,6 +67,8 @@ public class ChatMessage {
     message.senderType = senderType;
     message.messageType = messageType;
     message.contentText = contentText;
+    message.generationType = generationType;
+    message.imageCategory = imageCategory;
     message.parentMessageId = parentMessageId;
     message.sortOrder = sortOrder;
     message.status = "ACTIVE";
