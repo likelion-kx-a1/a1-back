@@ -41,4 +41,36 @@ public class ChatMessageFile {
 
   @Column(nullable = false)
   private OffsetDateTime createdAt;
+
+  public static ChatMessageFile create(
+      Long messageId,
+      String fileType,
+      String bucketName,
+      String storagePath,
+      String publicUrl,
+      String originalFilename,
+      String storedFilename,
+      String mimeType,
+      Long fileSize,
+      Integer width,
+      Integer height,
+      Integer durationSeconds) {
+    ChatMessageFile file = new ChatMessageFile();
+
+    file.messageId = messageId;
+    file.fileType = fileType;
+    file.bucketName = bucketName;
+    file.storagePath = storagePath;
+    file.publicUrl = publicUrl;
+    file.originalFilename = originalFilename;
+    file.storedFilename = storedFilename;
+    file.mimeType = mimeType;
+    file.fileSize = fileSize;
+    file.width = width;
+    file.height = height;
+    file.durationSeconds = durationSeconds;
+    file.createdAt = OffsetDateTime.now();
+
+    return file;
+  }
 }

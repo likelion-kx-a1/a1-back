@@ -39,4 +39,10 @@ public class ChatRepositoryAdapter implements ChatRepository {
   public List<Chat> findActiveStandaloneByUserId(Long userId) {
     return repository.findByUserIdAndProjectIdIsNullAndDeletedAtIsNullOrderByCreatedAtDesc(userId);
   }
+
+  @Override
+  public Optional<Chat> findFirstActiveByUserIdAndProjectId(Long userId, Long projectId) {
+    return repository.findFirstByUserIdAndProjectIdAndDeletedAtIsNullOrderByCreatedAtAsc(
+        userId, projectId);
+  }
 }

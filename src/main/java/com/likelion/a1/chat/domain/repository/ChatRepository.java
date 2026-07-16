@@ -14,4 +14,6 @@ public interface ChatRepository {
   List<Chat> findActiveByUserIdAndProjectId(Long userId, Long projectId);
 
   List<Chat> findActiveStandaloneByUserId(Long userId);
+
+  Optional<Chat> findFirstActiveByUserIdAndProjectId(Long userId, Long projectId);
 }
