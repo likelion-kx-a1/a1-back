@@ -44,4 +44,41 @@ public class GeneratedAsset {
   private OffsetDateTime updatedAt;
 
   private OffsetDateTime deletedAt;
+
+  public static GeneratedAsset create(
+      Long userId,
+      Long chatId,
+      Long generationJobId,
+      Long responseMessageId,
+      Long parentAssetId,
+      String assetType,
+      String imageCategory,
+      String title,
+      String prompt) {
+    GeneratedAsset asset = new GeneratedAsset();
+    OffsetDateTime now = OffsetDateTime.now();
+
+    asset.userId = userId;
+    asset.chatId = chatId;
+    asset.generationJobId = generationJobId;
+    asset.responseMessageId = responseMessageId;
+    asset.parentAssetId = parentAssetId;
+    asset.assetType = assetType;
+    asset.imageCategory = imageCategory;
+    asset.title = title;
+    asset.prompt = prompt;
+    asset.status = "ACTIVE";
+    asset.createdAt = now;
+    asset.updatedAt = now;
+
+    return asset;
+  }
+
+  public boolean isOwnedBy(Long userId) {
+    return this.userId.equals(userId);
+  }
+
+  public boolean isDeleted() {
+    return this.deletedAt != null || "DELETED".equals(this.status);
+  }
 }

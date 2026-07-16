@@ -41,4 +41,36 @@ public class AssetFile {
 
   @Column(nullable = false)
   private OffsetDateTime createdAt;
+
+  public static AssetFile create(
+      Long generatedAssetId,
+      String fileType,
+      String bucketName,
+      String storagePath,
+      String publicUrl,
+      String originalFilename,
+      String storedFilename,
+      String mimeType,
+      Long fileSize,
+      Integer width,
+      Integer height,
+      Integer durationSeconds) {
+    AssetFile file = new AssetFile();
+
+    file.generatedAssetId = generatedAssetId;
+    file.fileType = fileType;
+    file.bucketName = bucketName;
+    file.storagePath = storagePath;
+    file.publicUrl = publicUrl;
+    file.originalFilename = originalFilename;
+    file.storedFilename = storedFilename;
+    file.mimeType = mimeType;
+    file.fileSize = fileSize;
+    file.width = width;
+    file.height = height;
+    file.durationSeconds = durationSeconds;
+    file.createdAt = OffsetDateTime.now();
+
+    return file;
+  }
 }
