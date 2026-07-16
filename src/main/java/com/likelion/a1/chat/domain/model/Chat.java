@@ -81,6 +81,16 @@ public class Chat {
     }
   }
 
+  public void startGenerating() {
+    this.isGenerating = true;
+    this.updatedAt = OffsetDateTime.now();
+  }
+
+  public void finishGenerating() {
+    this.isGenerating = false;
+    this.updatedAt = OffsetDateTime.now();
+  }
+
   public boolean isOwnedBy(Long userId) {
     return this.userId.equals(userId);
   }

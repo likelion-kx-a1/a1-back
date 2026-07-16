@@ -52,8 +52,45 @@ public class FileUploadService {
         result.fileSize());
   }
 
+  public UploadResponse uploadGeneratedChatFile(
+      Long userId,
+      Long chatId,
+      byte[] content,
+      String originalFilename,
+      String contentType,
+      String fileType) {
+    chatService.findOwnedChat(userId, chatId);
+    validateContent(content);
+
+    String normalizedFileType = normalizeGeneratedFileType(fileType);
+    StorageUploadResult result =
+        mediaStoragePort.upload(
+            new StorageUploadCommand(
+                content,
+                originalFilename,
+                normalizeContentType(contentType),
+                null,
+                buildChatGeneratedDirectory(userId, chatId, normalizedFileType)));
+
+    return new UploadResponse(
+        normalizedFileType,
+        result.bucketName(),
+        result.storagePath(),
+        result.publicUrl(),
+        result.originalFilename(),
+        result.storedFilename(),
+        result.mimeType(),
+        result.fileSize());
+  }
+
   private void validateFile(MultipartFile file) {
     if (file == null || file.isEmpty()) {
+      throw new BusinessException(ErrorCode.INVALID_INPUT);
+    }
+  }
+
+  private void validateContent(byte[] content) {
+    if (content == null || content.length == 0) {
       throw new BusinessException(ErrorCode.INVALID_INPUT);
     }
   }
@@ -79,6 +116,15 @@ public class FileUploadService {
     return normalized;
   }
 
+  private String normalizeGeneratedFileType(String fileType) {
+    String normalized = normalizeFileType(fileType);
+    if (!List.of("IMAGE", "VIDEO").contains(normalized)) {
+      throw new BusinessException(ErrorCode.INVALID_INPUT);
+    }
+
+    return normalized;
+  }
+
   private String normalizeContentType(String contentType) {
     if (!StringUtils.hasText(contentType)) {
       return "application/octet-stream";
@@ -96,6 +142,15 @@ public class FileUploadService {
         + resolveInputDirectoryName(fileType);
   }
 
+  private String buildChatGeneratedDirectory(Long userId, Long chatId, String fileType) {
+    return "users/"
+        + userId
+        + "/chats/"
+        + chatId
+        + "/generated/"
+        + resolveGeneratedDirectoryName(fileType);
+  }
+
   private String resolveInputDirectoryName(String fileType) {
     if ("IMAGE".equals(fileType)) {
       return "images";
@@ -106,5 +161,13 @@ public class FileUploadService {
     }
 
     return "files";
+  }
+
+  private String resolveGeneratedDirectoryName(String fileType) {
+    if ("IMAGE".equals(fileType)) {
+      return "images";
+    }
+
+    return "videos";
   }
 }
