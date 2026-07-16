@@ -39,7 +39,7 @@ public class FileUploadService {
                 file.getOriginalFilename(),
                 normalizeContentType(file.getContentType()),
                 null,
-                "users/" + userId + "/chats/" + chatId + "/input"));
+                buildChatInputDirectory(userId, chatId, normalizedFileType)));
 
     return new UploadResponse(
         normalizedFileType,
@@ -85,5 +85,26 @@ public class FileUploadService {
     }
 
     return contentType.trim();
+  }
+
+  private String buildChatInputDirectory(Long userId, Long chatId, String fileType) {
+    return "users/"
+        + userId
+        + "/chats/"
+        + chatId
+        + "/input/"
+        + resolveInputDirectoryName(fileType);
+  }
+
+  private String resolveInputDirectoryName(String fileType) {
+    if ("IMAGE".equals(fileType)) {
+      return "images";
+    }
+
+    if ("VIDEO".equals(fileType)) {
+      return "videos";
+    }
+
+    return "files";
   }
 }
