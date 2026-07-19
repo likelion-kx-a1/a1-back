@@ -70,7 +70,7 @@ public class GenerationJob {
     job.chatId = chatId;
     job.aiModelId = aiModelId;
     job.requestMessageId = requestMessageId;
-    job.jobType = jobType;
+    job.generationType = jobType;
     job.prompt = prompt;
     job.requestPayload = requestPayload;
     job.status = GenerationStatus.PROCESSING.name();

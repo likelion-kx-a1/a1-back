@@ -12,7 +12,6 @@ public enum ErrorCode {
   INVALID_GENERATION_STATE(HttpStatus.CONFLICT, "GENERATION-002", "현재 상태에서는 요청을 처리할 수 없습니다."),
   AI_PROVIDER_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "PROVIDER-001", "AI 공급자가 설정되지 않았습니다."),
   USER_LOGIN_ID_DUPLICATE(HttpStatus.CONFLICT, "USER_LOGIN_ID_DUPLICATE", "이미 사용 중인 아이디입니다."),
-  USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "사용자를 찾을 수 없습니다."),
   // 회원가입 및 로그인 관련 에러 코드
   LOGIN_ID_NOT_FOUND(HttpStatus.UNAUTHORIZED, "LOGIN_ID_NOT_FOUND", "아이디가 일치하지 않습니다."),
   PASSWORD_NOT_MATCH(HttpStatus.UNAUTHORIZED, "PASSWORD_NOT_MATCH", "비밀번호가 일치하지 않습니다."),
