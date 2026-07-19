@@ -51,6 +51,8 @@ app:
     public-base-url: ${STORAGE_PUBLIC_BASE_URL:}
     endpoint: ${STORAGE_ENDPOINT:}
     path-style-access: ${STORAGE_PATH_STYLE_ACCESS:false}
+    access-key: ${STORAGE_ACCESS_KEY:${AWS_ACCESS_KEY_ID:}}
+    secret-key: ${STORAGE_SECRET_KEY:${AWS_SECRET_ACCESS_KEY:}}
   jwt:
     secret: ${JWT_SECRET:local-dev-secret-key-must-be-at-least-32-bytes}
     access-token-expiration-seconds: ${JWT_ACCESS_TOKEN_EXPIRATION_SECONDS:3600}
