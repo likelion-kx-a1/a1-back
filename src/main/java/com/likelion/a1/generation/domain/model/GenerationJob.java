@@ -25,8 +25,11 @@ public class GenerationJob {
   private Long aiModelId;
   private Long requestMessageId;
 
-  @Column(nullable = false, length = 50)
-  private String jobType;
+  @Column(nullable = false, length = 20)
+  private String generationType;
+
+  @Column(length = 30)
+  private String imageCategory;
 
   @Column(columnDefinition = "text")
   private String prompt;

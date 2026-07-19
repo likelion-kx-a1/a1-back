@@ -5,22 +5,23 @@ import java.time.OffsetDateTime;
 public final class MediaDtos {
   private MediaDtos() {}
 
-  public record GeneratedMediaResponse(
+  public record GeneratedAssetResponse(
       Long id,
       Long userId,
       Long chatId,
       Long generationJobId,
       Long responseMessageId,
-      Long parentMediaId,
-      String mediaType,
+      Long parentAssetId,
+      String assetType,
+      String imageCategory,
       String title,
       String prompt,
       String status,
       OffsetDateTime createdAt) {}
 
-  public record GeneratedMediaFileResponse(
+  public record AssetFileResponse(
       Long id,
-      Long generatedMediaId,
+      Long generatedAssetId,
       String fileType,
       String publicUrl,
       String originalFilename,
@@ -31,34 +32,32 @@ public final class MediaDtos {
       Integer height,
       Integer durationSeconds) {}
 
-  public record CreateFolderRequest(Long projectId, Long parentFolderId, String name) {}
+  public record CreateFolderRequest(Long parentFolderId, String name) {}
 
-  public record FolderResponse(
+  public record StorageFolderResponse(
       Long id,
       Long userId,
-      Long projectId,
       Long parentFolderId,
       String name,
       String status,
       OffsetDateTime createdAt) {}
 
-  public record SaveMediaRequest(
-      Long generatedMediaId, Long projectId, Long folderId, String displayName) {}
+  public record SaveAssetRequest(Long generatedAssetId, Long folderId, String displayName) {}
 
-  public record SavedMediaResponse(
+  public record SavedAssetResponse(
       Long id,
       Long userId,
-      Long generatedMediaId,
-      Long projectId,
       Long folderId,
+      Long generatedAssetId,
       String displayName,
+      String status,
       OffsetDateTime createdAt) {}
 
   public record DownloadResponse(
       Long id,
       Long userId,
-      Long generatedMediaId,
-      Long generatedMediaFileId,
+      Long generatedAssetId,
+      Long assetFileId,
       String downloadFilename,
       OffsetDateTime downloadedAt) {}
 }

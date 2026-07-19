@@ -17,9 +17,9 @@ public class Download {
   private Long userId;
 
   @Column(nullable = false)
-  private Long generatedMediaId;
+  private Long generatedAssetId;
 
-  private Long generatedMediaFileId;
+  private Long assetFileId;
 
   @Column(nullable = false)
   private String downloadFilename;

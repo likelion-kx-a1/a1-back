@@ -77,4 +77,91 @@ public class User {
   public static User local(String email, String passwordHash, String name) {
     return new User(email, passwordHash, name);
   }
+  public static User signup(
+    String loginId, 
+    String email, 
+    String passwordHash, 
+    String name, 
+    LocalDate birthDate, 
+    String phoneNumber
+  ) {
+    User user = new User();
+    OffsetDateTime now = OffsetDateTime.now();
+
+    user.loginId = loginId;
+    user.email = email.trim().toLowerCase();
+    user.passwordHash = passwordHash;
+    user.name = name.trim();
+    user.birthDate = birthDate;
+    user.phoneNumber = phoneNumber.trim();
+    user.role = "USER";
+    user.accountStatus = "INACTIVE";
+    user.approvalStatus = "PENDING";
+    user.loginCount = 0;
+    user.createdAt = now;
+    user.updatedAt = now;
+
+    return user;
+  }
+
+  public void recordLogin(){
+    this.loginCount++;
+    this.lastLoginAt = OffsetDateTime.now();
+    this.updatedAt = this.lastLoginAt;
+  }
+
+  public void recordLogout(){
+    this.lastLogoutAt = OffsetDateTime.now();
+    this.updatedAt = this.lastLogoutAt;
+  }
+
+  public void changePassword(String newPasswordHash) {
+    this.passwordHash = newPasswordHash;
+    this.updatedAt = OffsetDateTime.now();
+  }
+
+  public void approve(Long adminUserId) {
+    OffsetDateTime now = OffsetDateTime.now();
+
+    this.approvalStatus = "APPROVED";
+    this.accountStatus = "ACTIVE";
+    this.approvedBy = adminUserId;
+    this.approvedAt = now;
+    this.rejectedAt = null;
+    this.rejectionReason = null;
+    this.updatedAt = now;
+  }
+
+  public void reject(String reason) {
+    OffsetDateTime now = OffsetDateTime.now();
+
+    this.approvalStatus = "REJECTED";
+    this.accountStatus = "INACTIVE";
+    this.rejectedAt = now;
+    this.rejectionReason = reason;
+    this.updatedAt = now;
+  }
+
+  public void changeAccountStatus(String accountStatus) {
+    this.accountStatus = accountStatus;
+    this.updatedAt = OffsetDateTime.now();
+  }
+
+  public void delete() {
+    OffsetDateTime now = OffsetDateTime.now();
+
+    this.accountStatus = "INACTIVE";
+    this.deletedAt = now;
+    this.updatedAt = now;
+  }
+
+  public boolean isDeleted() {
+    return this.deletedAt != null;
+  }
+
+  public boolean isLoginAllowed() {
+    return deletedAt==null
+        && "APPROVED".equals(this.approvalStatus)
+        && "ACTIVE".equals(accountStatus);
+  }
 }

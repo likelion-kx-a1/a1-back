@@ -7,8 +7,8 @@ import lombok.*;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@Table(name = "saved_folders")
-public class SavedFolder {
+@Table(name = "storage_folders")
+public class StorageFolder {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
@@ -16,7 +16,6 @@ public class SavedFolder {
   @Column(nullable = false)
   private Long userId;
 
-  private Long projectId;
   private Long parentFolderId;
 
   @Column(nullable = false, length = 150)

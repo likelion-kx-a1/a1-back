@@ -30,7 +30,8 @@ public class AuthSession {
 
   @Column(nullable = false)
   private OffsetDateTime expiredAt;
-
+  
+  @Column
   private OffsetDateTime revokedAt;
 
   @Column(nullable = false, length = 30)
@@ -41,4 +42,44 @@ public class AuthSession {
 
   @Column(nullable = false)
   private OffsetDateTime updatedAt;
+
+  public static AuthSession create(
+      Long userId,
+      String sessionId,
+      String refreshTokenHash,
+      String ipAddress,
+      String userAgent,
+      OffsetDateTime expiredAt) {
+    AuthSession session = new AuthSession();
+    OffsetDateTime now = OffsetDateTime.now();
+    
+    // Set the properties of the session object
+    session.userId = userId;
+    session.sessionId = sessionId;
+    session.refreshTokenHash = refreshTokenHash;
+    session.ipAddress = ipAddress;
+    session.userAgent = userAgent;
+    session.expiredAt = expiredAt;
+    session.status = "ACTIVE";
+    session.createdAt = now;
+    session.updatedAt = now;
+
+    return session;
+  }
+  
+  public void revoke() {
+    this.status = "REVOKED";
+    this.revokedAt = OffsetDateTime.now();
+    this.updatedAt = this.revokedAt;
+  }
+
+  public boolean isActive() {
+    return "ACTIVE".equals(this.status)
+        && this.revokedAt == null
+        && this.expiredAt.isAfter(OffsetDateTime.now());
+  }
+
+  public boolean isOwnedBy(Long userId, String sessionId) {
+    return this.userId.equals(userId) && this.sessionId.equals(sessionId);
+  }
 }
