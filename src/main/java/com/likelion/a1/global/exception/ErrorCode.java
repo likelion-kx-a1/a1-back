@@ -35,7 +35,7 @@ public enum ErrorCode {
   STORAGE_FILE_NOT_FOUND(HttpStatus.NOT_FOUND, "STORAGE_FILE_NOT_FOUND", "스토리지 파일을 찾을 수 없습니다."),
   STORAGE_FOLDER_NOT_FOUND(HttpStatus.NOT_FOUND, "STORAGE_FOLDER_NOT_FOUND", "라이브러리 폴더를 찾을 수 없습니다."),
   SAVED_ASSET_NOT_FOUND(HttpStatus.NOT_FOUND, "SAVED_ASSET_NOT_FOUND", "저장된 에셋을 찾을 수 없습니다."),
-  INVALID_STORAGE_FOLDER_DEPTH(HttpStatus.BAD_REQUEST, "INVALID_STORAGE_FOLDER_DEPTH", "폴더는 한 단계까지만 생성할 수 있습니다.");
+  INVALID_STORAGE_FOLDER_DEPTH(HttpStatus.BAD_REQUEST, "INVALID_STORAGE_FOLDER_DEPTH", "폴더는 한 단계까지만 생성할 수 있습니다."),
   AI_PROVIDER_REQUEST_FAILED(HttpStatus.BAD_GATEWAY, "PROVIDER-002", "AI 공급자 호출에 실패했습니다."),
   MEDIA_UPLOAD_FAILED(HttpStatus.BAD_GATEWAY, "MEDIA-001", "미디어 업로드에 실패했습니다.");
   private final HttpStatus status;
