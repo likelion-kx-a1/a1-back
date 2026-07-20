@@ -60,6 +60,8 @@ public class MockFalGenerationAdapter implements FalGenerationPort {
     if (isVideoModel(resolvedModelCode)) {
       Map<String, Object> video = new LinkedHashMap<>();
       video.put("url", "data:video/mp4;base64," + MOCK_MEDIA_BASE64);
+      video.put("engine", isHighQuality(resolvedModelCode) ? "seedance-2.0" : "kling-o3-standard");
+      video.put("variant", resolveVideoVariant(resolvedModelCode));
       raw.put("video", video);
     } else {
       Map<String, Object> image = new LinkedHashMap<>();
@@ -72,5 +74,25 @@ public class MockFalGenerationAdapter implements FalGenerationPort {
 
   private boolean isVideoModel(String modelCode) {
     return modelCode != null && modelCode.toLowerCase().contains("video");
+  }
+
+  /** api_2.md 분기 엔진 규격: seedance-2.0(고품질) vs kling(빠른 생성) 모델 패밀리 판정. */
+  private boolean isHighQuality(String modelCode) {
+    return modelCode != null && modelCode.toLowerCase().contains("seedance");
+  }
+
+  /** modelCode 슬러그 말단(text/image/reference-to-video)으로 어떤 이미지 개수 분기였는지 되짚는다. */
+  private String resolveVideoVariant(String modelCode) {
+    if (modelCode == null) {
+      return "text-to-video";
+    }
+    String lower = modelCode.toLowerCase();
+    if (lower.contains("reference-to-video")) {
+      return "reference-to-video";
+    }
+    if (lower.contains("image-to-video")) {
+      return "image-to-video";
+    }
+    return "text-to-video";
   }
 }

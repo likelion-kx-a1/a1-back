@@ -8,6 +8,7 @@ import com.likelion.a1.generation.application.port.out.FalGenerationSubmission;
 import com.likelion.a1.global.exception.BusinessException;
 import com.likelion.a1.global.exception.ErrorCode;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
@@ -43,7 +44,7 @@ public class FalGenerationAdapter implements FalGenerationPort {
         restTemplate.exchange(
             baseUrl + "/" + modelCode,
             HttpMethod.POST,
-            new HttpEntity<>(input, buildHeaders()),
+            new HttpEntity<>(mapImagesForFalPayload(input), buildHeaders()),
             String.class);
 
     Map<String, Object> raw = parseJson(response.getBody());
@@ -70,6 +71,26 @@ public class FalGenerationAdapter implements FalGenerationPort {
     }
 
     return new FalGenerationStatus(status, raw);
+  }
+
+  /**
+   * GenerationAiService는 프로토콜에 무관한 공용 "images" 키만 채운다. fal.ai 각 모델의 실제 스펙에 맞춰
+   * 여기서 최종 매핑한다: 1장이면 image_url(단일 문자열), 2장 이상이면 reference_images(배열)로 변환한다
+   * (api_2.md 3번 규격). 0장(text-to-video)이면 images 키 자체가 없으므로 원본 그대로 전달한다.
+   */
+  private Map<String, Object> mapImagesForFalPayload(Map<String, Object> input) {
+    if (!(input.get("images") instanceof List<?> images) || images.isEmpty()) {
+      return input;
+    }
+
+    Map<String, Object> mapped = new LinkedHashMap<>(input);
+    mapped.remove("images");
+    if (images.size() == 1) {
+      mapped.put("image_url", images.get(0));
+    } else {
+      mapped.put("reference_images", images);
+    }
+    return mapped;
   }
 
   private String resolveUrl(Object candidate, String modelCode, String requestId, String suffix) {

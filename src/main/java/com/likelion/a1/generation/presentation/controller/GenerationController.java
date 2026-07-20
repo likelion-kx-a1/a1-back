@@ -6,6 +6,7 @@ import com.likelion.a1.generation.presentation.dto.GenerationJobDtos.FalJobReque
 import com.likelion.a1.generation.presentation.dto.GenerationJobDtos.PromptRequest;
 import com.likelion.a1.generation.presentation.dto.GenerationJobDtos.Response;
 import com.likelion.a1.generation.presentation.dto.GenerationJobDtos.ReversePromptRequest;
+import com.likelion.a1.generation.presentation.dto.GenerationJobDtos.VideoGenerationRequest;
 import com.likelion.a1.global.response.ApiResponse;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -46,6 +47,21 @@ public class GenerationController {
     GenerationJob job =
         generationAiService.submitFalJob(
             request.userId(), request.chatId(), request.jobType(), request.modelCode(), request.input());
+    return ApiResponse.success(Response.from(job));
+  }
+
+  @PostMapping("/videos")
+  public ApiResponse<Response> generateVideo(@Valid @RequestBody VideoGenerationRequest request) {
+    GenerationJob job =
+        generationAiService.generateVideo(
+            request.userId(),
+            request.chatId(),
+            request.highQuality(),
+            request.images(),
+            request.prompt(),
+            request.duration(),
+            request.aspectRatio(),
+            request.refinePrompt());
     return ApiResponse.success(Response.from(job));
   }
 
