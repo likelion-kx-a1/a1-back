@@ -1,8 +1,11 @@
 package com.likelion.a1.media.infrastructure.storage.s3;
 
 import com.likelion.a1.media.application.port.out.MediaStoragePort;
+import com.likelion.a1.media.application.port.out.StorageDownloadResult;
 import com.likelion.a1.media.application.port.out.StorageUploadCommand;
 import com.likelion.a1.media.application.port.out.StorageUploadResult;
+import com.likelion.a1.global.exception.BusinessException;
+import com.likelion.a1.global.exception.ErrorCode;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,7 +13,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
 @Component
 public class S3MediaStorageAdapter implements MediaStoragePort {
@@ -51,6 +57,28 @@ public class S3MediaStorageAdapter implements MediaStoragePort {
         storedFilename,
         command.contentType(),
         command.content().length);
+  }
+
+  @Override
+  public StorageDownloadResult download(String bucketName, String storagePath) {
+    try {
+      var response =
+          s3Client.getObjectAsBytes(
+              GetObjectRequest.builder().bucket(bucketName).key(storagePath).build());
+
+      return new StorageDownloadResult(
+          response.asByteArray(),
+          response.response().contentType(),
+          response.response().contentLength());
+    } catch (NoSuchKeyException exception) {
+      throw new BusinessException(ErrorCode.STORAGE_FILE_NOT_FOUND);
+    } catch (S3Exception exception) {
+      if (exception.statusCode() == 404) {
+        throw new BusinessException(ErrorCode.STORAGE_FILE_NOT_FOUND);
+      }
+
+      throw exception;
+    }
   }
 
   private String resolvePublicUrl(String storagePath) {
