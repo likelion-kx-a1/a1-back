@@ -3,10 +3,10 @@ package com.likelion.a1.library.presentation.controller;
 import com.likelion.a1.global.response.ApiResponse;
 import com.likelion.a1.library.application.service.MyLibraryService;
 import com.likelion.a1.media.presentation.dto.MediaDtos.CreateLibraryProjectRequest;
+import com.likelion.a1.media.presentation.dto.MediaDtos.LibraryProjectContentsResponse;
 import com.likelion.a1.media.presentation.dto.MediaDtos.LibraryProjectResponse;
 import com.likelion.a1.media.presentation.dto.MediaDtos.SaveAssetRequest;
 import com.likelion.a1.media.presentation.dto.MediaDtos.SavedAssetResponse;
-import com.likelion.a1.media.presentation.dto.MediaDtos.StorageFolderResponse;
 import com.likelion.a1.media.presentation.dto.MediaDtos.UpdateLibraryProjectRequest;
 import com.likelion.a1.media.presentation.dto.MediaDtos.UpdateSavedAssetRequest;
 import com.likelion.a1.user.infrastructure.security.JwtPrincipal;
@@ -62,6 +62,19 @@ public class MyLibraryController {
         myLibraryService.updateLibraryProject(principal.userId(), libraryProjectId, request));
   }
 
+  @GetMapping("/projects/{libraryProjectId}/contents")
+  public ApiResponse<LibraryProjectContentsResponse> getLibraryProjectContents(
+      @AuthenticationPrincipal JwtPrincipal principal,
+      @PathVariable Long libraryProjectId,
+      @RequestParam(required = false) String assetType,
+      @RequestParam(required = false) String keyword) {
+    return ApiResponse.success(
+        "LIBRARY_PROJECT_CONTENTS_FETCHED",
+        "라이브러리 프로젝트 내용을 조회했습니다.",
+        myLibraryService.getLibraryProjectContents(
+            principal.userId(), libraryProjectId, assetType, keyword));
+  }
+
   @DeleteMapping("/projects/{libraryProjectId}")
   public ApiResponse<Void> deleteLibraryProject(
       @AuthenticationPrincipal JwtPrincipal principal, @PathVariable Long libraryProjectId) {
@@ -70,21 +83,12 @@ public class MyLibraryController {
     return ApiResponse.success("LIBRARY_PROJECT_DELETED", "라이브러리 프로젝트가 삭제되었습니다.", null);
   }
 
-  @GetMapping("/projects/{libraryProjectId}/folders")
-  public ApiResponse<List<StorageFolderResponse>> getFolders(
-      @AuthenticationPrincipal JwtPrincipal principal, @PathVariable Long libraryProjectId) {
-    return ApiResponse.success(
-        "LIBRARY_FOLDERS_FETCHED",
-        "라이브러리 프로젝트의 이미지/동영상 폴더를 조회했습니다.",
-        myLibraryService.getFolders(principal.userId(), libraryProjectId));
-  }
-
   @PostMapping("/assets")
   public ApiResponse<SavedAssetResponse> saveAsset(
       @AuthenticationPrincipal JwtPrincipal principal, @RequestBody SaveAssetRequest request) {
     return ApiResponse.success(
         "LIBRARY_ASSET_SAVED",
-        "에셋이 내 라이브러리에 저장되었습니다.",
+        "에셋이 라이브러리에 저장되었습니다.",
         myLibraryService.saveAsset(principal.userId(), request));
   }
 
