@@ -87,7 +87,7 @@ public class MyLibraryService {
     int depth = 0;
     if (parentProjectId != null) {
       LibraryProject parent = findOwnedLibraryProject(userId, parentProjectId);
-      if (parent.getDepth() >= 1) {
+      if (parent.getDepth() >= 1 || parent.getParentProjectId() != null) {
         throw new BusinessException(ErrorCode.INVALID_STORAGE_FOLDER_DEPTH);
       }
       depth = parent.getDepth() + 1;

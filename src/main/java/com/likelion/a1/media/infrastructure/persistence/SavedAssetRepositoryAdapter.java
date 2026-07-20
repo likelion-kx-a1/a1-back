@@ -27,6 +27,24 @@ public class SavedAssetRepositoryAdapter implements SavedAssetRepository {
   @Override
   public List<SavedAsset> findActiveByUserId(
       Long userId, Long libraryProjectId, Long folderId, String assetType, String keyword) {
-    return repository.findActiveByUserId(userId, libraryProjectId, folderId, assetType, keyword);
+    String normalizedKeyword = normalizeKeyword(keyword);
+
+    return repository.findByUserIdAndStatusOrderByCreatedAtDesc(userId, "ACTIVE").stream()
+        .filter(savedAsset -> libraryProjectId == null || libraryProjectId.equals(savedAsset.getLibraryProjectId()))
+        .filter(savedAsset -> folderId == null || folderId.equals(savedAsset.getFolderId()))
+        .filter(savedAsset -> assetType == null || assetType.equals(savedAsset.getAssetType()))
+        .filter(
+            savedAsset ->
+                normalizedKeyword == null
+                    || savedAsset.getDisplayName().toLowerCase().contains(normalizedKeyword))
+        .toList();
+  }
+
+  private String normalizeKeyword(String keyword) {
+    if (keyword == null || keyword.isBlank()) {
+      return null;
+    }
+
+    return keyword.trim().toLowerCase();
   }
 }
