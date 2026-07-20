@@ -1,6 +1,9 @@
 package com.likelion.a1.generation.presentation.dto;
 
 import com.likelion.a1.generation.domain.model.GenerationJob;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import java.time.OffsetDateTime;
 import java.util.Map;
 
@@ -15,6 +18,27 @@ public final class GenerationJobDtos {
       String imageCategory,
       String prompt,
       Map<String, Object> requestPayload) {}
+
+  public record PromptRequest(
+      @NotNull Long userId,
+      @NotNull Long chatId,
+      String imageBase64,
+      String mimeType,
+      @NotBlank String instruction) {}
+
+  public record ReversePromptRequest(
+      @NotNull Long userId,
+      @NotNull Long chatId,
+      @NotBlank String imageBase64,
+      @NotBlank String mimeType,
+      @NotBlank String instruction) {}
+
+  public record FalJobRequest(
+      @NotNull Long userId,
+      @NotNull Long chatId,
+      @NotBlank String jobType,
+      @NotBlank String modelCode,
+      @NotEmpty Map<String, Object> input) {}
 
   public record Response(
       Long id,
