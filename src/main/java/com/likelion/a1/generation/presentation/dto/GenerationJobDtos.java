@@ -34,11 +34,22 @@ public final class GenerationJobDtos {
       @NotBlank String mimeType,
       @NotBlank String instruction) {}
 
+  /**
+   * sheetType/sheetValue는 선택 항목이다(api_3.md 시트 주입 엔진 규격). 생략하거나 null이면
+   * SheetType.NONE으로 간주되어 기존 호출자(모델 비교 실험, 단독 이미지 생성 등)와 100% 호환된다.
+   * - sheetType="CHARACTER_EXPRESSION" + jobType="VIDEO_GENERATION": sheetValue는
+   *   HARMONIOUS/CHILLY/MYSTERIOUS/DRAMATIC 중 하나(상황 분위기 코드)
+   * - sheetType="CHARACTER_EXPRESSION" + jobType="IMAGE_GENERATION": sheetValue는 사용되지 않음
+   *   (9종 감정 3x3 그리드 고정 문구가 결합됨)
+   * - sheetType="CUSTOM": sheetValue는 사용자가 직접 편집한 텍스트 그대로
+   */
   public record FalJobRequest(
       @NotNull Long userId,
       @NotNull Long chatId,
       @NotBlank String jobType,
       @NotBlank String modelCode,
+      String sheetType,
+      String sheetValue,
       @NotEmpty Map<String, Object> input) {}
 
   /**

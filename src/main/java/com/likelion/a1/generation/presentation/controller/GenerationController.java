@@ -46,7 +46,13 @@ public class GenerationController {
   public ApiResponse<Response> submitFalJob(@Valid @RequestBody FalJobRequest request) {
     GenerationJob job =
         generationAiService.submitFalJob(
-            request.userId(), request.chatId(), request.jobType(), request.modelCode(), request.input());
+            request.userId(),
+            request.chatId(),
+            request.jobType(),
+            request.modelCode(),
+            request.input(),
+            request.sheetType(),
+            request.sheetValue());
     return ApiResponse.success(Response.from(job));
   }
 

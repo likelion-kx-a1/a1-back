@@ -16,6 +16,7 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientResponseException;
@@ -112,21 +113,42 @@ public class GenerationAiService {
   }
 
   public GenerationJob submitFalJob(
-      Long userId, Long chatId, String jobType, String modelCode, Map<String, Object> input) {
+      Long userId,
+      Long chatId,
+      String jobType,
+      String modelCode,
+      Map<String, Object> input,
+      String sheetType,
+      String sheetValue) {
     GenerationType type = parseGenerationType(jobType);
-    String prompt = input.get("prompt") instanceof String promptText ? promptText : null;
+    String originalPrompt = input.get("prompt") instanceof String promptText ? promptText : null;
+
+    // 시트(Sheet) 주입 엔진: 시트 유형/생성 모드(이미지·비디오)에 따라 fal.ai로 보낼 최종 prompt를
+    // 조건부로 결합한다(api_3.md 규격). sheetType이 없거나 NONE이면 원본 프롬프트가 그대로 반환된다.
+    String composedPrompt = SheetPromptComposer.compose(originalPrompt, type, sheetType, sheetValue);
+    String finalPrompt = composedPrompt.isBlank() ? null : composedPrompt;
+
+    Map<String, Object> effectiveInput = new LinkedHashMap<>(input);
+    if (finalPrompt != null) {
+      effectiveInput.put("prompt", finalPrompt);
+    }
 
     Map<String, Object> requestPayload = new LinkedHashMap<>();
     requestPayload.put("modelCode", modelCode);
-    requestPayload.put("input", input);
+    requestPayload.put("input", effectiveInput);
+    requestPayload.put("sheetType", sheetType);
+    requestPayload.put("sheetValue", sheetValue);
+    if (!Objects.equals(originalPrompt, finalPrompt)) {
+      requestPayload.put("originalPrompt", originalPrompt);
+    }
 
     GenerationJob job =
         generationJobRepository.save(
-            GenerationJob.create(userId, chatId, null, null, type.name(), prompt, requestPayload));
+            GenerationJob.create(userId, chatId, null, null, type.name(), finalPrompt, requestPayload));
 
     try {
       long startedAtMs = System.currentTimeMillis();
-      FalGenerationSubmission submission = falGenerationPort.submit(modelCode, input);
+      FalGenerationSubmission submission = falGenerationPort.submit(modelCode, effectiveInput);
       long submissionLatencyMs = System.currentTimeMillis() - startedAtMs;
 
       Map<String, Object> responsePayload = new LinkedHashMap<>();
