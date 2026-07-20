@@ -55,6 +55,13 @@ public class ProjectService {
 
   public void delete(Long userId, Long projectId) {
     Project project = findOwnedProject(userId, projectId);
+    chatRepository.findActiveByUserIdAndProjectId(userId, projectId).stream()
+        .forEach(
+            chat -> {
+              chat.delete();
+              chatRepository.save(chat);
+            });
+
     project.delete();
 
     projectRepository.save(project);

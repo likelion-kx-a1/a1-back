@@ -7,8 +7,8 @@ import lombok.*;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@Table(name = "storage_folders")
-public class StorageFolder {
+@Table(name = "library_projects")
+public class LibraryProject {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
@@ -16,18 +16,13 @@ public class StorageFolder {
   @Column(nullable = false)
   private Long userId;
 
-  private Long libraryProjectId;
-
-  private Long parentFolderId;
+  private Long parentProjectId;
 
   @Column(nullable = false, length = 150)
   private String name;
 
-  @Column(nullable = false, length = 30)
-  private String folderType = "CUSTOM";
-
-  @Column(length = 20)
-  private String assetType;
+  @Column(nullable = false)
+  private int depth;
 
   @Column(nullable = false, length = 30)
   private String status = "ACTIVE";
@@ -40,27 +35,19 @@ public class StorageFolder {
 
   private OffsetDateTime deletedAt;
 
-  public static StorageFolder create(
-      Long userId,
-      Long libraryProjectId,
-      Long parentFolderId,
-      String name,
-      String folderType,
-      String assetType) {
-    StorageFolder folder = new StorageFolder();
+  public static LibraryProject create(Long userId, Long parentProjectId, String name, int depth) {
+    LibraryProject project = new LibraryProject();
     OffsetDateTime now = OffsetDateTime.now();
 
-    folder.userId = userId;
-    folder.libraryProjectId = libraryProjectId;
-    folder.parentFolderId = parentFolderId;
-    folder.name = name;
-    folder.folderType = folderType;
-    folder.assetType = assetType;
-    folder.status = "ACTIVE";
-    folder.createdAt = now;
-    folder.updatedAt = now;
+    project.userId = userId;
+    project.parentProjectId = parentProjectId;
+    project.name = name;
+    project.depth = depth;
+    project.status = "ACTIVE";
+    project.createdAt = now;
+    project.updatedAt = now;
 
-    return folder;
+    return project;
   }
 
   public void updateName(String name) {
@@ -82,13 +69,5 @@ public class StorageFolder {
 
   public boolean isDeleted() {
     return this.deletedAt != null || "DELETED".equals(this.status);
-  }
-
-  public boolean isRootFolder() {
-    return this.parentFolderId == null;
-  }
-
-  public boolean isSystemFolder() {
-    return "SYSTEM".equals(this.folderType);
   }
 }
