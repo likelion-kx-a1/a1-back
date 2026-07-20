@@ -6,7 +6,7 @@ spring:
   profiles:
     default: local
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/a1}
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/a1}
     username: ${DB_USERNAME:a1}
     password: ${DB_PASSWORD:a1-local-password}
   mail:
@@ -58,7 +58,15 @@ app:
     access-token-expiration-seconds: ${JWT_ACCESS_TOKEN_EXPIRATION_SECONDS:43200}
     refresh-token-expiration-days: ${JWT_REFRESH_TOKEN_EXPIRATION_DAYS:14}
   ai:
-    openai:
-      api-key: ${OPENAI_API_KEY:}
     fal:
+      base-url: ${FAL_BASE_URL:https://queue.fal.run}
       api-key: ${FAL_API_KEY:}
+    claude:
+      base-url: ${CLAUDE_BASE_URL:https://api.anthropic.com}
+      api-key: ${ANTHROPIC_API_KEY:}
+      model: ${CLAUDE_MODEL:claude-sonnet-5}
+      version: ${ANTHROPIC_VERSION:2023-06-01}
+    openai:
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      api-key: ${OPENAI_API_KEY:}
+      model: ${OPENAI_VISION_MODEL:gpt-4.1}
