@@ -22,6 +22,13 @@ public class SavedAsset {
 
   private Long sourceGeneratedAssetId;
 
+  @Column(nullable = false, length = 30)
+  private String sourceType = "GENERATED_ASSET";
+
+  private Long sourceChatId;
+  private Long sourceMessageId;
+  private Long sourceMessageFileId;
+
   @Column(nullable = false, length = 20)
   private String assetType;
 
@@ -44,6 +51,10 @@ public class SavedAsset {
       Long libraryProjectId,
       Long folderId,
       Long sourceGeneratedAssetId,
+      String sourceType,
+      Long sourceChatId,
+      Long sourceMessageId,
+      Long sourceMessageFileId,
       String assetType,
       String displayName) {
     SavedAsset savedAsset = new SavedAsset();
@@ -53,6 +64,10 @@ public class SavedAsset {
     savedAsset.libraryProjectId = libraryProjectId;
     savedAsset.folderId = folderId;
     savedAsset.sourceGeneratedAssetId = sourceGeneratedAssetId;
+    savedAsset.sourceType = sourceType;
+    savedAsset.sourceChatId = sourceChatId;
+    savedAsset.sourceMessageId = sourceMessageId;
+    savedAsset.sourceMessageFileId = sourceMessageFileId;
     savedAsset.assetType = assetType;
     savedAsset.displayName = displayName;
     savedAsset.status = "ACTIVE";

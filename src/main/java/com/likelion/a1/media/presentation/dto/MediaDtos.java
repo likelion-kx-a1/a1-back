@@ -44,24 +44,53 @@ public final class MediaDtos {
       String name,
       int depth,
       String status,
-      StorageFolderResponse imageFolder,
-      StorageFolderResponse videoFolder,
       OffsetDateTime createdAt,
       OffsetDateTime updatedAt) {}
 
-  public record StorageFolderResponse(
+  public record LibraryProjectContentsResponse(
+      LibraryProjectResponse project,
+      List<LibraryProjectResponse> childProjects,
+      List<LibraryAssetResponse> assets) {}
+
+  public record LibraryProjectSummaryResponse(
+      Long id, String name, Long parentProjectId, int depth) {}
+
+  public record LibrarySourceChatResponse(Long id, Long projectId, String title) {}
+
+  public record LibrarySourceMessageResponse(
       Long id,
-      Long userId,
-      Long parentFolderId,
-      Long libraryProjectId,
-      String name,
-      String folderType,
-      String assetType,
-      String status,
+      String senderType,
+      String messageType,
+      String contentText,
       OffsetDateTime createdAt) {}
 
+  public record LibrarySourceGeneratedAssetResponse(
+      Long id,
+      String title,
+      String prompt,
+      String assetType,
+      String imageCategory,
+      OffsetDateTime createdAt) {}
+
+  public record LibraryAssetResponse(
+      Long id,
+      Long userId,
+      String displayName,
+      String assetType,
+      String status,
+      OffsetDateTime createdAt,
+      LibraryProjectSummaryResponse libraryProject,
+      LibrarySourceChatResponse sourceChat,
+      LibrarySourceMessageResponse sourceMessage,
+      LibrarySourceGeneratedAssetResponse sourceGeneratedAsset,
+      List<SavedAssetFileResponse> files) {}
+
   public record SaveAssetRequest(
-      Long generatedAssetId, Long libraryProjectId, Long folderId, String displayName) {}
+      String sourceType,
+      Long generatedAssetId,
+      Long chatMessageFileId,
+      Long libraryProjectId,
+      String displayName) {}
 
   public record UpdateSavedAssetRequest(String displayName) {}
 
@@ -69,8 +98,11 @@ public final class MediaDtos {
       Long id,
       Long userId,
       Long libraryProjectId,
-      Long folderId,
       Long sourceGeneratedAssetId,
+      String sourceType,
+      Long sourceChatId,
+      Long sourceMessageId,
+      Long sourceMessageFileId,
       String displayName,
       String assetType,
       String status,

@@ -1,5 +1,11 @@
 package com.likelion.a1.library.application.service;
 
+import com.likelion.a1.chat.domain.model.Chat;
+import com.likelion.a1.chat.domain.model.ChatMessage;
+import com.likelion.a1.chat.domain.model.ChatMessageFile;
+import com.likelion.a1.chat.domain.repository.ChatMessageFileRepository;
+import com.likelion.a1.chat.domain.repository.ChatMessageRepository;
+import com.likelion.a1.chat.domain.repository.ChatRepository;
 import com.likelion.a1.global.exception.BusinessException;
 import com.likelion.a1.global.exception.ErrorCode;
 import com.likelion.a1.media.application.port.out.MediaStoragePort;
@@ -11,19 +17,22 @@ import com.likelion.a1.media.domain.model.GeneratedAsset;
 import com.likelion.a1.media.domain.model.LibraryProject;
 import com.likelion.a1.media.domain.model.SavedAsset;
 import com.likelion.a1.media.domain.model.SavedAssetFile;
-import com.likelion.a1.media.domain.model.StorageFolder;
 import com.likelion.a1.media.domain.repository.AssetFileRepository;
 import com.likelion.a1.media.domain.repository.GeneratedAssetRepository;
 import com.likelion.a1.media.domain.repository.LibraryProjectRepository;
 import com.likelion.a1.media.domain.repository.SavedAssetFileRepository;
 import com.likelion.a1.media.domain.repository.SavedAssetRepository;
-import com.likelion.a1.media.domain.repository.StorageFolderRepository;
 import com.likelion.a1.media.presentation.dto.MediaDtos.CreateLibraryProjectRequest;
+import com.likelion.a1.media.presentation.dto.MediaDtos.LibraryAssetResponse;
+import com.likelion.a1.media.presentation.dto.MediaDtos.LibraryProjectContentsResponse;
 import com.likelion.a1.media.presentation.dto.MediaDtos.LibraryProjectResponse;
+import com.likelion.a1.media.presentation.dto.MediaDtos.LibraryProjectSummaryResponse;
+import com.likelion.a1.media.presentation.dto.MediaDtos.LibrarySourceChatResponse;
+import com.likelion.a1.media.presentation.dto.MediaDtos.LibrarySourceGeneratedAssetResponse;
+import com.likelion.a1.media.presentation.dto.MediaDtos.LibrarySourceMessageResponse;
 import com.likelion.a1.media.presentation.dto.MediaDtos.SaveAssetRequest;
 import com.likelion.a1.media.presentation.dto.MediaDtos.SavedAssetFileResponse;
 import com.likelion.a1.media.presentation.dto.MediaDtos.SavedAssetResponse;
-import com.likelion.a1.media.presentation.dto.MediaDtos.StorageFolderResponse;
 import com.likelion.a1.media.presentation.dto.MediaDtos.UpdateLibraryProjectRequest;
 import com.likelion.a1.media.presentation.dto.MediaDtos.UpdateSavedAssetRequest;
 import java.util.List;
@@ -38,30 +47,38 @@ import org.springframework.util.StringUtils;
 public class MyLibraryService {
   private static final String ASSET_TYPE_IMAGE = "IMAGE";
   private static final String ASSET_TYPE_VIDEO = "VIDEO";
+  private static final String SOURCE_TYPE_GENERATED_ASSET = "GENERATED_ASSET";
+  private static final String SOURCE_TYPE_CHAT_MESSAGE_FILE = "CHAT_MESSAGE_FILE";
 
   private final LibraryProjectRepository libraryProjectRepository;
-  private final StorageFolderRepository folderRepository;
   private final SavedAssetRepository savedAssetRepository;
   private final SavedAssetFileRepository savedAssetFileRepository;
   private final GeneratedAssetRepository generatedAssetRepository;
   private final AssetFileRepository assetFileRepository;
   private final MediaStoragePort mediaStoragePort;
+  private final ChatRepository chatRepository;
+  private final ChatMessageRepository chatMessageRepository;
+  private final ChatMessageFileRepository chatMessageFileRepository;
 
   public MyLibraryService(
       LibraryProjectRepository libraryProjectRepository,
-      StorageFolderRepository folderRepository,
       SavedAssetRepository savedAssetRepository,
       SavedAssetFileRepository savedAssetFileRepository,
       GeneratedAssetRepository generatedAssetRepository,
       AssetFileRepository assetFileRepository,
-      MediaStoragePort mediaStoragePort) {
+      MediaStoragePort mediaStoragePort,
+      ChatRepository chatRepository,
+      ChatMessageRepository chatMessageRepository,
+      ChatMessageFileRepository chatMessageFileRepository) {
     this.libraryProjectRepository = libraryProjectRepository;
-    this.folderRepository = folderRepository;
     this.savedAssetRepository = savedAssetRepository;
     this.savedAssetFileRepository = savedAssetFileRepository;
     this.generatedAssetRepository = generatedAssetRepository;
     this.assetFileRepository = assetFileRepository;
     this.mediaStoragePort = mediaStoragePort;
+    this.chatRepository = chatRepository;
+    this.chatMessageRepository = chatMessageRepository;
+    this.chatMessageFileRepository = chatMessageFileRepository;
   }
 
   public LibraryProjectResponse createLibraryProject(
@@ -77,12 +94,9 @@ public class MyLibraryService {
     }
 
     LibraryProject project =
-        libraryProjectRepository.save(
-            LibraryProject.create(userId, parentProjectId, normalizeRequired(request.name()), depth));
-    StorageFolder imageFolder = createSystemFolder(userId, project.getId(), ASSET_TYPE_IMAGE);
-    StorageFolder videoFolder = createSystemFolder(userId, project.getId(), ASSET_TYPE_VIDEO);
+        LibraryProject.create(userId, parentProjectId, normalizeRequired(request.name()), depth);
 
-    return toLibraryProjectResponse(project, imageFolder, videoFolder);
+    return toLibraryProjectResponse(libraryProjectRepository.save(project));
   }
 
   @Transactional(readOnly = true)
@@ -95,6 +109,44 @@ public class MyLibraryService {
             : libraryProjectRepository.findActiveByUserIdAndParentProjectId(userId, parentProjectId);
 
     return projects.stream().map(this::toLibraryProjectResponse).toList();
+  }
+
+  @Transactional(readOnly = true)
+  public LibraryProjectContentsResponse getLibraryProjectContents(
+      Long userId, Long libraryProjectId, String assetType, String keyword) {
+    LibraryProject project = findOwnedLibraryProject(userId, libraryProjectId);
+    List<LibraryProjectResponse> childProjects =
+        libraryProjectRepository.findActiveByUserIdAndParentProjectId(userId, project.getId())
+            .stream()
+            .map(this::toLibraryProjectResponse)
+            .toList();
+
+    List<SavedAsset> savedAssets =
+        savedAssetRepository.findActiveByUserId(
+            userId,
+            project.getId(),
+            null,
+            normalizeNullableUpper(assetType),
+            normalizeNullable(keyword));
+    Map<Long, List<SavedAssetFile>> filesBySavedAssetId =
+        savedAssetFileRepository.findBySavedAssetIds(
+                savedAssets.stream().map(SavedAsset::getId).toList())
+            .stream()
+            .collect(Collectors.groupingBy(SavedAssetFile::getSavedAssetId));
+    LibraryProjectSummaryResponse projectSummary = toLibraryProjectSummaryResponse(project);
+
+    List<LibraryAssetResponse> assets =
+        savedAssets.stream()
+            .map(
+                savedAsset ->
+                    toLibraryAssetResponse(
+                        savedAsset,
+                        projectSummary,
+                        filesBySavedAssetId.getOrDefault(savedAsset.getId(), List.of())))
+            .toList();
+
+    return new LibraryProjectContentsResponse(
+        toLibraryProjectResponse(project), childProjects, assets);
   }
 
   public LibraryProjectResponse updateLibraryProject(
@@ -121,33 +173,64 @@ public class MyLibraryService {
     libraryProjectRepository.save(project);
   }
 
-  @Transactional(readOnly = true)
-  public List<StorageFolderResponse> getFolders(Long userId, Long libraryProjectId) {
-    findOwnedLibraryProject(userId, libraryProjectId);
-
-    return folderRepository.findActiveByLibraryProjectId(userId, libraryProjectId).stream()
-        .map(this::toFolderResponse)
-        .toList();
-  }
-
   public SavedAssetResponse saveAsset(Long userId, SaveAssetRequest request) {
     LibraryProject project = findOwnedLibraryProject(userId, request.libraryProjectId());
+    String sourceType = resolveSourceType(request);
+
+    if (SOURCE_TYPE_CHAT_MESSAGE_FILE.equals(sourceType)) {
+      return saveChatMessageFileAsset(userId, project, request);
+    }
+
+    return saveGeneratedAsset(userId, project, request);
+  }
+
+  private SavedAssetResponse saveGeneratedAsset(
+      Long userId, LibraryProject project, SaveAssetRequest request) {
     GeneratedAsset generatedAsset = findOwnedGeneratedAsset(userId, request.generatedAssetId());
     String assetType = normalizeAssetType(generatedAsset.getAssetType());
-    StorageFolder targetFolder = findSystemFolder(userId, project.getId(), assetType);
 
     SavedAsset savedAsset =
         savedAssetRepository.save(
             SavedAsset.create(
                 userId,
                 project.getId(),
-                targetFolder.getId(),
+                null,
                 generatedAsset.getId(),
+                SOURCE_TYPE_GENERATED_ASSET,
+                generatedAsset.getChatId(),
+                generatedAsset.getResponseMessageId(),
+                null,
                 assetType,
                 resolveDisplayName(request.displayName(), generatedAsset)));
 
     List<SavedAssetFile> copiedFiles = copyGeneratedAssetFiles(userId, savedAsset);
     savedAssetFileRepository.saveAll(copiedFiles);
+
+    return toSavedAssetResponse(savedAsset, copiedFiles);
+  }
+
+  private SavedAssetResponse saveChatMessageFileAsset(
+      Long userId, LibraryProject project, SaveAssetRequest request) {
+    ChatMessageFile sourceFile = findOwnedChatMessageFile(userId, request.chatMessageFileId());
+    ChatMessage sourceMessage = findActiveMessage(sourceFile.getMessageId());
+    String assetType = normalizeFileAssetType(sourceFile.getFileType(), sourceFile.getMimeType());
+
+    SavedAsset savedAsset =
+        savedAssetRepository.save(
+            SavedAsset.create(
+                userId,
+                project.getId(),
+                null,
+                null,
+                SOURCE_TYPE_CHAT_MESSAGE_FILE,
+                sourceMessage.getChatId(),
+                sourceMessage.getId(),
+                sourceFile.getId(),
+                assetType,
+                resolveDisplayName(request.displayName(), sourceFile)));
+
+    SavedAssetFile copiedFile = copyChatMessageFile(userId, savedAsset, sourceFile);
+    List<SavedAssetFile> copiedFiles = savedAssetFileRepository.saveAll(List.of(copiedFile));
 
     return toSavedAssetResponse(savedAsset, copiedFiles);
   }
@@ -161,14 +244,22 @@ public class MyLibraryService {
 
     List<SavedAsset> savedAssets =
         savedAssetRepository.findActiveByUserId(
-            userId, libraryProjectId, null, normalizeNullableUpper(assetType), normalizeNullable(keyword));
+            userId,
+            libraryProjectId,
+            null,
+            normalizeNullableUpper(assetType),
+            normalizeNullable(keyword));
     Map<Long, List<SavedAssetFile>> filesBySavedAssetId =
-        savedAssetFileRepository.findBySavedAssetIds(savedAssets.stream().map(SavedAsset::getId).toList())
+        savedAssetFileRepository.findBySavedAssetIds(
+                savedAssets.stream().map(SavedAsset::getId).toList())
             .stream()
             .collect(Collectors.groupingBy(SavedAssetFile::getSavedAssetId));
 
     return savedAssets.stream()
-        .map(savedAsset -> toSavedAssetResponse(savedAsset, filesBySavedAssetId.getOrDefault(savedAsset.getId(), List.of())))
+        .map(
+            savedAsset ->
+                toSavedAssetResponse(
+                    savedAsset, filesBySavedAssetId.getOrDefault(savedAsset.getId(), List.of())))
         .toList();
   }
 
@@ -203,13 +294,6 @@ public class MyLibraryService {
             savedAsset -> {
               savedAsset.delete();
               savedAssetRepository.save(savedAsset);
-            });
-
-    folderRepository.findActiveByLibraryProjectId(userId, libraryProjectId).stream()
-        .forEach(
-            folder -> {
-              folder.delete();
-              folderRepository.save(folder);
             });
   }
 
@@ -254,6 +338,35 @@ public class MyLibraryService {
         sourceFile.getDurationSeconds());
   }
 
+  private SavedAssetFile copyChatMessageFile(
+      Long userId, SavedAsset savedAsset, ChatMessageFile sourceFile) {
+    StorageDownloadResult downloaded =
+        mediaStoragePort.download(sourceFile.getBucketName(), sourceFile.getStoragePath());
+    StorageUploadResult uploaded =
+        mediaStoragePort.upload(
+            new StorageUploadCommand(
+                downloaded.content(),
+                sourceFile.getOriginalFilename(),
+                resolveContentType(downloaded.contentType(), sourceFile.getMimeType()),
+                null,
+                resolveLibraryDirectory(userId, savedAsset)));
+
+    return SavedAssetFile.create(
+        savedAsset.getId(),
+        null,
+        sourceFile.getFileType(),
+        uploaded.bucketName(),
+        uploaded.storagePath(),
+        uploaded.publicUrl(),
+        sourceFile.getOriginalFilename(),
+        uploaded.storedFilename(),
+        uploaded.mimeType(),
+        uploaded.fileSize(),
+        sourceFile.getWidth(),
+        sourceFile.getHeight(),
+        sourceFile.getDurationSeconds());
+  }
+
   private String resolveLibraryDirectory(Long userId, SavedAsset savedAsset) {
     String mediaDirectory = ASSET_TYPE_VIDEO.equals(savedAsset.getAssetType()) ? "videos" : "images";
 
@@ -263,23 +376,6 @@ public class MyLibraryService {
         + savedAsset.getLibraryProjectId()
         + "/"
         + mediaDirectory;
-  }
-
-  private StorageFolder createSystemFolder(Long userId, Long libraryProjectId, String assetType) {
-    return folderRepository.save(
-        StorageFolder.create(
-            userId,
-            libraryProjectId,
-            null,
-            ASSET_TYPE_VIDEO.equals(assetType) ? "동영상" : "이미지",
-            "SYSTEM",
-            assetType));
-  }
-
-  private StorageFolder findSystemFolder(Long userId, Long libraryProjectId, String assetType) {
-    return folderRepository
-        .findActiveSystemFolder(userId, libraryProjectId, assetType)
-        .orElseGet(() -> createSystemFolder(userId, libraryProjectId, assetType));
   }
 
   private LibraryProject findOwnedLibraryProject(Long userId, Long libraryProjectId) {
@@ -321,15 +417,42 @@ public class MyLibraryService {
     return generatedAsset;
   }
 
-  private LibraryProjectResponse toLibraryProjectResponse(LibraryProject project) {
-    return toLibraryProjectResponse(
-        project,
-        findSystemFolder(project.getUserId(), project.getId(), ASSET_TYPE_IMAGE),
-        findSystemFolder(project.getUserId(), project.getId(), ASSET_TYPE_VIDEO));
+  private ChatMessageFile findOwnedChatMessageFile(Long userId, Long chatMessageFileId) {
+    if (chatMessageFileId == null) {
+      throw new BusinessException(ErrorCode.CHAT_FILE_NOT_FOUND);
+    }
+
+    ChatMessageFile file =
+        chatMessageFileRepository
+            .findById(chatMessageFileId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.CHAT_FILE_NOT_FOUND));
+    ChatMessage message = findActiveMessage(file.getMessageId());
+    Chat chat =
+        chatRepository
+            .findById(message.getChatId())
+            .orElseThrow(() -> new BusinessException(ErrorCode.CHAT_FILE_NOT_FOUND));
+
+    if (chat.isDeleted() || !chat.isOwnedBy(userId)) {
+      throw new BusinessException(ErrorCode.CHAT_FILE_NOT_FOUND);
+    }
+
+    return file;
   }
 
-  private LibraryProjectResponse toLibraryProjectResponse(
-      LibraryProject project, StorageFolder imageFolder, StorageFolder videoFolder) {
+  private ChatMessage findActiveMessage(Long messageId) {
+    ChatMessage message =
+        chatMessageRepository
+            .findById(messageId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.CHAT_FILE_NOT_FOUND));
+
+    if (message.isDeleted()) {
+      throw new BusinessException(ErrorCode.CHAT_FILE_NOT_FOUND);
+    }
+
+    return message;
+  }
+
+  private LibraryProjectResponse toLibraryProjectResponse(LibraryProject project) {
     return new LibraryProjectResponse(
         project.getId(),
         project.getUserId(),
@@ -337,8 +460,6 @@ public class MyLibraryService {
         project.getName(),
         project.getDepth(),
         project.getStatus(),
-        toFolderResponse(imageFolder),
-        toFolderResponse(videoFolder),
         project.getCreatedAt(),
         project.getUpdatedAt());
   }
@@ -349,8 +470,11 @@ public class MyLibraryService {
         savedAsset.getId(),
         savedAsset.getUserId(),
         savedAsset.getLibraryProjectId(),
-        savedAsset.getFolderId(),
         savedAsset.getSourceGeneratedAssetId(),
+        savedAsset.getSourceType(),
+        savedAsset.getSourceChatId(),
+        savedAsset.getSourceMessageId(),
+        savedAsset.getSourceMessageFileId(),
         savedAsset.getDisplayName(),
         savedAsset.getAssetType(),
         savedAsset.getStatus(),
@@ -358,17 +482,107 @@ public class MyLibraryService {
         savedAsset.getCreatedAt());
   }
 
-  private StorageFolderResponse toFolderResponse(StorageFolder folder) {
-    return new StorageFolderResponse(
-        folder.getId(),
-        folder.getUserId(),
-        folder.getParentFolderId(),
-        folder.getLibraryProjectId(),
-        folder.getName(),
-        folder.getFolderType(),
-        folder.getAssetType(),
-        folder.getStatus(),
-        folder.getCreatedAt());
+  private LibraryAssetResponse toLibraryAssetResponse(
+      SavedAsset savedAsset,
+      LibraryProjectSummaryResponse libraryProject,
+      List<SavedAssetFile> files) {
+    GeneratedAsset sourceGeneratedAsset = findSourceGeneratedAsset(savedAsset);
+    Chat sourceChat = findSourceChat(sourceGeneratedAsset);
+    if (sourceChat == null) {
+      sourceChat = findSourceChat(savedAsset);
+    }
+    ChatMessage sourceMessage = findSourceMessage(savedAsset, sourceGeneratedAsset);
+
+    return new LibraryAssetResponse(
+        savedAsset.getId(),
+        savedAsset.getUserId(),
+        savedAsset.getDisplayName(),
+        savedAsset.getAssetType(),
+        savedAsset.getStatus(),
+        savedAsset.getCreatedAt(),
+        libraryProject,
+        toLibrarySourceChatResponse(sourceChat),
+        toLibrarySourceMessageResponse(sourceMessage),
+        toLibrarySourceGeneratedAssetResponse(sourceGeneratedAsset),
+        files.stream().map(this::toSavedAssetFileResponse).toList());
+  }
+
+  private LibraryProjectSummaryResponse toLibraryProjectSummaryResponse(LibraryProject project) {
+    return new LibraryProjectSummaryResponse(
+        project.getId(), project.getName(), project.getParentProjectId(), project.getDepth());
+  }
+
+  private LibrarySourceChatResponse toLibrarySourceChatResponse(Chat chat) {
+    if (chat == null) {
+      return null;
+    }
+
+    return new LibrarySourceChatResponse(chat.getId(), chat.getProjectId(), chat.getTitle());
+  }
+
+  private LibrarySourceMessageResponse toLibrarySourceMessageResponse(ChatMessage message) {
+    if (message == null) {
+      return null;
+    }
+
+    return new LibrarySourceMessageResponse(
+        message.getId(),
+        message.getSenderType(),
+        message.getMessageType(),
+        message.getContentText(),
+        message.getCreatedAt());
+  }
+
+  private LibrarySourceGeneratedAssetResponse toLibrarySourceGeneratedAssetResponse(
+      GeneratedAsset asset) {
+    if (asset == null) {
+      return null;
+    }
+
+    return new LibrarySourceGeneratedAssetResponse(
+        asset.getId(),
+        asset.getTitle(),
+        asset.getPrompt(),
+        asset.getAssetType(),
+        asset.getImageCategory(),
+        asset.getCreatedAt());
+  }
+
+  private GeneratedAsset findSourceGeneratedAsset(SavedAsset savedAsset) {
+    if (savedAsset.getSourceGeneratedAssetId() == null) {
+      return null;
+    }
+
+    return generatedAssetRepository.findById(savedAsset.getSourceGeneratedAssetId()).orElse(null);
+  }
+
+  private Chat findSourceChat(GeneratedAsset generatedAsset) {
+    if (generatedAsset == null || generatedAsset.getChatId() == null) {
+      return null;
+    }
+
+    return chatRepository.findById(generatedAsset.getChatId()).orElse(null);
+  }
+
+  private Chat findSourceChat(SavedAsset savedAsset) {
+    if (savedAsset.getSourceChatId() == null) {
+      return null;
+    }
+
+    return chatRepository.findById(savedAsset.getSourceChatId()).orElse(null);
+  }
+
+  private ChatMessage findSourceMessage(SavedAsset savedAsset, GeneratedAsset generatedAsset) {
+    Long sourceMessageId = savedAsset.getSourceMessageId();
+    if (sourceMessageId == null && generatedAsset != null) {
+      sourceMessageId = generatedAsset.getResponseMessageId();
+    }
+
+    if (sourceMessageId == null) {
+      return null;
+    }
+
+    return chatMessageRepository.findById(sourceMessageId).orElse(null);
   }
 
   private SavedAssetFileResponse toSavedAssetFileResponse(SavedAssetFile file) {
@@ -399,6 +613,22 @@ public class MyLibraryService {
     return "저장된 에셋";
   }
 
+  private String resolveDisplayName(String displayName, ChatMessageFile sourceFile) {
+    if (StringUtils.hasText(displayName)) {
+      return displayName.trim();
+    }
+
+    if (StringUtils.hasText(sourceFile.getOriginalFilename())) {
+      return sourceFile.getOriginalFilename().trim();
+    }
+
+    if (StringUtils.hasText(sourceFile.getStoredFilename())) {
+      return sourceFile.getStoredFilename().trim();
+    }
+
+    return "저장된 파일";
+  }
+
   private String resolveContentType(String storageContentType, String dbContentType) {
     if (StringUtils.hasText(storageContentType)) {
       return storageContentType;
@@ -418,6 +648,56 @@ public class MyLibraryService {
     }
 
     return normalized;
+  }
+
+  private String normalizeFileAssetType(String fileType, String mimeType) {
+    String normalizedFileType = normalizeNullableUpper(fileType);
+    if (ASSET_TYPE_IMAGE.equals(normalizedFileType) || ASSET_TYPE_VIDEO.equals(normalizedFileType)) {
+      return normalizedFileType;
+    }
+
+    String normalizedMimeType = normalizeNullable(mimeType);
+    if (normalizedMimeType != null) {
+      String lowerMimeType = normalizedMimeType.toLowerCase();
+      if (lowerMimeType.startsWith("image/")) {
+        return ASSET_TYPE_IMAGE;
+      }
+
+      if (lowerMimeType.startsWith("video/")) {
+        return ASSET_TYPE_VIDEO;
+      }
+    }
+
+    throw new BusinessException(ErrorCode.INVALID_INPUT);
+  }
+
+  private String resolveSourceType(SaveAssetRequest request) {
+    String sourceType = normalizeNullableUpper(request.sourceType());
+    if (sourceType == null) {
+      if (request.chatMessageFileId() != null) {
+        return SOURCE_TYPE_CHAT_MESSAGE_FILE;
+      }
+
+      if (request.generatedAssetId() != null) {
+        return SOURCE_TYPE_GENERATED_ASSET;
+      }
+    }
+
+    if (SOURCE_TYPE_GENERATED_ASSET.equals(sourceType)) {
+      if (request.generatedAssetId() == null) {
+        throw new BusinessException(ErrorCode.INVALID_INPUT);
+      }
+      return sourceType;
+    }
+
+    if (SOURCE_TYPE_CHAT_MESSAGE_FILE.equals(sourceType)) {
+      if (request.chatMessageFileId() == null) {
+        throw new BusinessException(ErrorCode.INVALID_INPUT);
+      }
+      return sourceType;
+    }
+
+    throw new BusinessException(ErrorCode.INVALID_INPUT);
   }
 
   private String normalizeRequired(String value) {
