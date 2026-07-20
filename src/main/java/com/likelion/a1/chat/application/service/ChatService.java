@@ -107,6 +107,20 @@ public class ChatService {
     chatRepository.save(chat);
   }
 
+  public ChatResponse startGenerating(Long userId, Long chatId) {
+    Chat chat = findOwnedChat(userId, chatId);
+    chat.startGenerating();
+
+    return toResponse(chatRepository.save(chat));
+  }
+
+  public ChatResponse finishGenerating(Long userId, Long chatId) {
+    Chat chat = findOwnedChat(userId, chatId);
+    chat.finishGenerating();
+
+    return toResponse(chatRepository.save(chat));
+  }
+
   public Chat findOwnedChat(Long userId, Long chatId) {
     Chat chat =
         chatRepository

@@ -4,6 +4,7 @@ import com.likelion.a1.chat.domain.model.ChatMessageFile;
 import com.likelion.a1.chat.domain.repository.ChatMessageFileRepository;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -26,5 +27,10 @@ public class ChatMessageFileRepositoryAdapter implements ChatMessageFileReposito
     }
 
     return repository.findByMessageIdInOrderByIdAsc(messageIds);
+  }
+
+  @Override
+  public Optional<ChatMessageFile> findById(Long id) {
+    return repository.findById(id);
   }
 }

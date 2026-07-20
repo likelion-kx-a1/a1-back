@@ -7,14 +7,16 @@ import lombok.*;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@Table(name = "asset_files")
-public class AssetFile {
+@Table(name = "saved_asset_files")
+public class SavedAssetFile {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
   @Column(nullable = false)
-  private Long generatedAssetId;
+  private Long savedAssetId;
+
+  private Long sourceAssetFileId;
 
   @Column(length = 30)
   private String fileType;
@@ -42,8 +44,9 @@ public class AssetFile {
   @Column(nullable = false)
   private OffsetDateTime createdAt;
 
-  public static AssetFile create(
-      Long generatedAssetId,
+  public static SavedAssetFile create(
+      Long savedAssetId,
+      Long sourceAssetFileId,
       String fileType,
       String bucketName,
       String storagePath,
@@ -55,9 +58,10 @@ public class AssetFile {
       Integer width,
       Integer height,
       Integer durationSeconds) {
-    AssetFile file = new AssetFile();
+    SavedAssetFile file = new SavedAssetFile();
 
-    file.generatedAssetId = generatedAssetId;
+    file.savedAssetId = savedAssetId;
+    file.sourceAssetFileId = sourceAssetFileId;
     file.fileType = fileType;
     file.bucketName = bucketName;
     file.storagePath = storagePath;
