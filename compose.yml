@@ -5,7 +5,7 @@ services:
       POSTGRES_DB: a1
       POSTGRES_USER: a1
       POSTGRES_PASSWORD: a1-local-password
-    ports: ["5432:5432"]
+    ports: ["5433:5432"]
     volumes: [postgres_data:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U a1"]

@@ -6,11 +6,12 @@ public enum ErrorCode {
   // 공통 에러 코드
   INVALID_INPUT(HttpStatus.BAD_REQUEST, "COMMON-001", "입력값이 올바르지 않습니다."),
   USER_EMAIL_DUPLICATE(HttpStatus.CONFLICT, "USER-001", "이미 사용 중인 이메일입니다."),
+  USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER-002", "존재하지 않는 사용자입니다."),
+  CHAT_NOT_FOUND(HttpStatus.NOT_FOUND, "CHAT-001", "존재하지 않는 채팅방입니다."),
   GENERATION_NOT_FOUND(HttpStatus.NOT_FOUND, "GENERATION-001", "생성 작업을 찾을 수 없습니다."),
   INVALID_GENERATION_STATE(HttpStatus.CONFLICT, "GENERATION-002", "현재 상태에서는 요청을 처리할 수 없습니다."),
   AI_PROVIDER_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "PROVIDER-001", "AI 공급자가 설정되지 않았습니다."),
   USER_LOGIN_ID_DUPLICATE(HttpStatus.CONFLICT, "USER_LOGIN_ID_DUPLICATE", "이미 사용 중인 아이디입니다."),
-  USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "사용자를 찾을 수 없습니다."),
   // 회원가입 및 로그인 관련 에러 코드
   LOGIN_ID_NOT_FOUND(HttpStatus.UNAUTHORIZED, "LOGIN_ID_NOT_FOUND", "아이디가 일치하지 않습니다."),
   PASSWORD_NOT_MATCH(HttpStatus.UNAUTHORIZED, "PASSWORD_NOT_MATCH", "비밀번호가 일치하지 않습니다."),
@@ -35,7 +36,8 @@ public enum ErrorCode {
   STORAGE_FOLDER_NOT_FOUND(HttpStatus.NOT_FOUND, "STORAGE_FOLDER_NOT_FOUND", "라이브러리 폴더를 찾을 수 없습니다."),
   SAVED_ASSET_NOT_FOUND(HttpStatus.NOT_FOUND, "SAVED_ASSET_NOT_FOUND", "저장된 에셋을 찾을 수 없습니다."),
   INVALID_STORAGE_FOLDER_DEPTH(HttpStatus.BAD_REQUEST, "INVALID_STORAGE_FOLDER_DEPTH", "폴더는 한 단계까지만 생성할 수 있습니다.");
-
+  AI_PROVIDER_REQUEST_FAILED(HttpStatus.BAD_GATEWAY, "PROVIDER-002", "AI 공급자 호출에 실패했습니다."),
+  MEDIA_UPLOAD_FAILED(HttpStatus.BAD_GATEWAY, "MEDIA-001", "미디어 업로드에 실패했습니다.");
   private final HttpStatus status;
   private final String code;
   private final String message;
