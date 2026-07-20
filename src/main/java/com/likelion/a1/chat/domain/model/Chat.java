@@ -69,7 +69,9 @@ public class Chat {
   public void delete() {
     OffsetDateTime now = OffsetDateTime.now();
 
-    this.status = "DELETED";
+    // Hard delete는 하지 않는다. 채팅 내용/파일 참조 보존을 위해 비활성 상태로만 전환한다.
+    // 이전 정책은 "DELETED"였지만, 채팅 삭제는 status=INACTIVE 소프트 삭제로 통일한다.
+    this.status = "INACTIVE";
     this.deletedAt = now;
     this.updatedAt = now;
   }
@@ -104,6 +106,6 @@ public class Chat {
   }
 
   public boolean isDeleted() {
-    return this.deletedAt != null || "DELETED".equals(this.status);
+    return this.deletedAt != null || "INACTIVE".equals(this.status) || "DELETED".equals(this.status);
   }
 }
