@@ -37,10 +37,15 @@ public final class MediaDtos {
 
   public record UpdateLibraryProjectRequest(String name) {}
 
+  public record CreateStorageFolderRequest(Long parentFolderId, String name) {}
+
+  public record UpdateStorageFolderRequest(String name) {}
+
   public record LibraryProjectResponse(
       Long id,
       Long userId,
       Long parentProjectId,
+      Long sourceProjectId,
       String name,
       int depth,
       String status,
@@ -49,11 +54,24 @@ public final class MediaDtos {
 
   public record LibraryProjectContentsResponse(
       LibraryProjectResponse project,
+      StorageFolderResponse currentFolder,
+      List<StorageFolderResponse> breadcrumbs,
       List<LibraryProjectResponse> childProjects,
+      List<StorageFolderResponse> folders,
       List<LibraryAssetResponse> assets) {}
 
   public record LibraryProjectSummaryResponse(
-      Long id, String name, Long parentProjectId, int depth) {}
+      Long id, String name, Long parentProjectId, Long sourceProjectId, int depth) {}
+
+  public record StorageFolderResponse(
+      Long id,
+      Long userId,
+      Long libraryProjectId,
+      Long parentFolderId,
+      String name,
+      String status,
+      OffsetDateTime createdAt,
+      OffsetDateTime updatedAt) {}
 
   public record LibrarySourceChatResponse(Long id, Long projectId, String title) {}
 
@@ -90,6 +108,7 @@ public final class MediaDtos {
       Long generatedAssetId,
       Long chatMessageFileId,
       Long libraryProjectId,
+      Long folderId,
       String displayName) {}
 
   public record UpdateSavedAssetRequest(String displayName) {}
@@ -98,6 +117,7 @@ public final class MediaDtos {
       Long id,
       Long userId,
       Long libraryProjectId,
+      Long folderId,
       Long sourceGeneratedAssetId,
       String sourceType,
       Long sourceChatId,

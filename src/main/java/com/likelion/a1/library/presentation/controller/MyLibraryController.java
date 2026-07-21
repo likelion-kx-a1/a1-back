@@ -3,12 +3,15 @@ package com.likelion.a1.library.presentation.controller;
 import com.likelion.a1.global.response.ApiResponse;
 import com.likelion.a1.library.application.service.MyLibraryService;
 import com.likelion.a1.media.presentation.dto.MediaDtos.CreateLibraryProjectRequest;
+import com.likelion.a1.media.presentation.dto.MediaDtos.CreateStorageFolderRequest;
 import com.likelion.a1.media.presentation.dto.MediaDtos.LibraryProjectContentsResponse;
 import com.likelion.a1.media.presentation.dto.MediaDtos.LibraryProjectResponse;
 import com.likelion.a1.media.presentation.dto.MediaDtos.SaveAssetRequest;
 import com.likelion.a1.media.presentation.dto.MediaDtos.SavedAssetResponse;
+import com.likelion.a1.media.presentation.dto.MediaDtos.StorageFolderResponse;
 import com.likelion.a1.media.presentation.dto.MediaDtos.UpdateLibraryProjectRequest;
 import com.likelion.a1.media.presentation.dto.MediaDtos.UpdateSavedAssetRequest;
+import com.likelion.a1.media.presentation.dto.MediaDtos.UpdateStorageFolderRequest;
 import com.likelion.a1.user.infrastructure.security.JwtPrincipal;
 import java.util.List;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -66,13 +69,14 @@ public class MyLibraryController {
   public ApiResponse<LibraryProjectContentsResponse> getLibraryProjectContents(
       @AuthenticationPrincipal JwtPrincipal principal,
       @PathVariable Long libraryProjectId,
+      @RequestParam(required = false) Long folderId,
       @RequestParam(required = false) String assetType,
       @RequestParam(required = false) String keyword) {
     return ApiResponse.success(
         "LIBRARY_PROJECT_CONTENTS_FETCHED",
         "라이브러리 프로젝트 내용을 조회했습니다.",
         myLibraryService.getLibraryProjectContents(
-            principal.userId(), libraryProjectId, assetType, keyword));
+            principal.userId(), libraryProjectId, folderId, assetType, keyword));
   }
 
   @DeleteMapping("/projects/{libraryProjectId}")
@@ -81,6 +85,36 @@ public class MyLibraryController {
     myLibraryService.deleteLibraryProject(principal.userId(), libraryProjectId);
 
     return ApiResponse.success("LIBRARY_PROJECT_DELETED", "라이브러리 프로젝트가 삭제되었습니다.", null);
+  }
+
+  @PostMapping("/projects/{libraryProjectId}/folders")
+  public ApiResponse<StorageFolderResponse> createFolder(
+      @AuthenticationPrincipal JwtPrincipal principal,
+      @PathVariable Long libraryProjectId,
+      @RequestBody CreateStorageFolderRequest request) {
+    return ApiResponse.success(
+        "LIBRARY_FOLDER_CREATED",
+        "라이브러리 폴더가 생성되었습니다.",
+        myLibraryService.createFolder(principal.userId(), libraryProjectId, request));
+  }
+
+  @PatchMapping("/folders/{folderId}")
+  public ApiResponse<StorageFolderResponse> updateFolder(
+      @AuthenticationPrincipal JwtPrincipal principal,
+      @PathVariable Long folderId,
+      @RequestBody UpdateStorageFolderRequest request) {
+    return ApiResponse.success(
+        "LIBRARY_FOLDER_UPDATED",
+        "라이브러리 폴더가 수정되었습니다.",
+        myLibraryService.updateFolder(principal.userId(), folderId, request));
+  }
+
+  @DeleteMapping("/folders/{folderId}")
+  public ApiResponse<Void> deleteFolder(
+      @AuthenticationPrincipal JwtPrincipal principal, @PathVariable Long folderId) {
+    myLibraryService.deleteFolder(principal.userId(), folderId);
+
+    return ApiResponse.success("LIBRARY_FOLDER_DELETED", "라이브러리 폴더가 삭제되었습니다.", null);
   }
 
   @PostMapping("/assets")

@@ -12,4 +12,6 @@ public interface LibraryProjectRepository {
   List<LibraryProject> findActiveByUserId(Long userId);
 
   List<LibraryProject> findActiveByUserIdAndParentProjectId(Long userId, Long parentProjectId);
+
+  Optional<LibraryProject> findActiveByUserIdAndSourceProjectId(Long userId, Long sourceProjectId);
 }

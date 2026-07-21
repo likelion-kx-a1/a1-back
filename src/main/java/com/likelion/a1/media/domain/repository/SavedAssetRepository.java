@@ -10,5 +10,10 @@ public interface SavedAssetRepository {
   Optional<SavedAsset> findById(Long id);
 
   List<SavedAsset> findActiveByUserId(
-      Long userId, Long libraryProjectId, Long folderId, String assetType, String keyword);
+      Long userId,
+      Long libraryProjectId,
+      Long folderId,
+      boolean filterFolder,
+      String assetType,
+      String keyword);
 }

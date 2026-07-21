@@ -38,8 +38,7 @@ public class StorageFolderRepositoryAdapter implements StorageFolderRepository {
   @Override
   public List<StorageFolder> findActiveByLibraryProjectIdAndParentFolderId(
       Long userId, Long libraryProjectId, Long parentFolderId) {
-    return repository.findByUserIdAndLibraryProjectIdAndParentFolderIdAndStatusOrderByCreatedAtDesc(
-        userId, libraryProjectId, parentFolderId, "ACTIVE");
+    return repository.findActiveChildren(userId, libraryProjectId, parentFolderId, "ACTIVE");
   }
 
   @Override

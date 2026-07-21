@@ -17,11 +17,14 @@ import com.likelion.a1.media.domain.model.GeneratedAsset;
 import com.likelion.a1.media.domain.model.LibraryProject;
 import com.likelion.a1.media.domain.model.SavedAsset;
 import com.likelion.a1.media.domain.model.SavedAssetFile;
+import com.likelion.a1.media.domain.model.StorageFolder;
 import com.likelion.a1.media.domain.repository.AssetFileRepository;
 import com.likelion.a1.media.domain.repository.GeneratedAssetRepository;
 import com.likelion.a1.media.domain.repository.LibraryProjectRepository;
 import com.likelion.a1.media.domain.repository.SavedAssetFileRepository;
 import com.likelion.a1.media.domain.repository.SavedAssetRepository;
+import com.likelion.a1.media.domain.repository.StorageFolderRepository;
+import com.likelion.a1.media.presentation.dto.MediaDtos.CreateStorageFolderRequest;
 import com.likelion.a1.media.presentation.dto.MediaDtos.CreateLibraryProjectRequest;
 import com.likelion.a1.media.presentation.dto.MediaDtos.LibraryAssetResponse;
 import com.likelion.a1.media.presentation.dto.MediaDtos.LibraryProjectContentsResponse;
@@ -33,6 +36,8 @@ import com.likelion.a1.media.presentation.dto.MediaDtos.LibrarySourceMessageResp
 import com.likelion.a1.media.presentation.dto.MediaDtos.SaveAssetRequest;
 import com.likelion.a1.media.presentation.dto.MediaDtos.SavedAssetFileResponse;
 import com.likelion.a1.media.presentation.dto.MediaDtos.SavedAssetResponse;
+import com.likelion.a1.media.presentation.dto.MediaDtos.StorageFolderResponse;
+import com.likelion.a1.media.presentation.dto.MediaDtos.UpdateStorageFolderRequest;
 import com.likelion.a1.media.presentation.dto.MediaDtos.UpdateLibraryProjectRequest;
 import com.likelion.a1.media.presentation.dto.MediaDtos.UpdateSavedAssetRequest;
 import java.util.List;
@@ -52,6 +57,7 @@ public class MyLibraryService {
 
   private final LibraryProjectRepository libraryProjectRepository;
   private final SavedAssetRepository savedAssetRepository;
+  private final StorageFolderRepository storageFolderRepository;
   private final SavedAssetFileRepository savedAssetFileRepository;
   private final GeneratedAssetRepository generatedAssetRepository;
   private final AssetFileRepository assetFileRepository;
@@ -63,6 +69,7 @@ public class MyLibraryService {
   public MyLibraryService(
       LibraryProjectRepository libraryProjectRepository,
       SavedAssetRepository savedAssetRepository,
+      StorageFolderRepository storageFolderRepository,
       SavedAssetFileRepository savedAssetFileRepository,
       GeneratedAssetRepository generatedAssetRepository,
       AssetFileRepository assetFileRepository,
@@ -72,6 +79,7 @@ public class MyLibraryService {
       ChatMessageFileRepository chatMessageFileRepository) {
     this.libraryProjectRepository = libraryProjectRepository;
     this.savedAssetRepository = savedAssetRepository;
+    this.storageFolderRepository = storageFolderRepository;
     this.savedAssetFileRepository = savedAssetFileRepository;
     this.generatedAssetRepository = generatedAssetRepository;
     this.assetFileRepository = assetFileRepository;
@@ -87,9 +95,6 @@ public class MyLibraryService {
     int depth = 0;
     if (parentProjectId != null) {
       LibraryProject parent = findOwnedLibraryProject(userId, parentProjectId);
-      if (parent.getDepth() >= 1 || parent.getParentProjectId() != null) {
-        throw new BusinessException(ErrorCode.INVALID_STORAGE_FOLDER_DEPTH);
-      }
       depth = parent.getDepth() + 1;
     }
 
@@ -97,6 +102,47 @@ public class MyLibraryService {
         LibraryProject.create(userId, parentProjectId, normalizeRequired(request.name()), depth);
 
     return toLibraryProjectResponse(libraryProjectRepository.save(project));
+  }
+
+  public LibraryProjectResponse createLinkedLibraryProject(
+      Long userId, Long sourceProjectId, String projectName) {
+    LibraryProject existingProject =
+        libraryProjectRepository
+            .findActiveByUserIdAndSourceProjectId(userId, sourceProjectId)
+            .orElse(null);
+    if (existingProject != null) {
+      return toLibraryProjectResponse(existingProject);
+    }
+
+    LibraryProject project =
+        LibraryProject.create(
+            userId, null, sourceProjectId, normalizeRequired(projectName) + " 보관함", 0);
+
+    return toLibraryProjectResponse(libraryProjectRepository.save(project));
+  }
+
+  public void detachLinkedLibraryProject(Long userId, Long sourceProjectId) {
+    libraryProjectRepository
+        .findActiveByUserIdAndSourceProjectId(userId, sourceProjectId)
+        .ifPresent(
+            project -> {
+              project.detachSourceProject();
+              libraryProjectRepository.save(project);
+            });
+  }
+
+  public void deleteLinkedLibraryProject(Long userId, Long sourceProjectId) {
+    libraryProjectRepository
+        .findActiveByUserIdAndSourceProjectId(userId, sourceProjectId)
+        .ifPresent(project -> deleteLibraryProject(userId, project.getId()));
+  }
+
+  @Transactional(readOnly = true)
+  public Long findLinkedLibraryProjectId(Long userId, Long sourceProjectId) {
+    return libraryProjectRepository
+        .findActiveByUserIdAndSourceProjectId(userId, sourceProjectId)
+        .map(LibraryProject::getId)
+        .orElse(null);
   }
 
   @Transactional(readOnly = true)
@@ -113,8 +159,16 @@ public class MyLibraryService {
 
   @Transactional(readOnly = true)
   public LibraryProjectContentsResponse getLibraryProjectContents(
-      Long userId, Long libraryProjectId, String assetType, String keyword) {
+      Long userId, Long libraryProjectId, Long folderId, String assetType, String keyword) {
     LibraryProject project = findOwnedLibraryProject(userId, libraryProjectId);
+    StorageFolder currentFolder = folderId == null ? null : findOwnedFolder(userId, libraryProjectId, folderId);
+    List<StorageFolderResponse> breadcrumbs = buildBreadcrumbs(userId, libraryProjectId, currentFolder);
+    List<StorageFolderResponse> folders =
+        storageFolderRepository
+            .findActiveByLibraryProjectIdAndParentFolderId(userId, project.getId(), folderId)
+            .stream()
+            .map(this::toFolderResponse)
+            .toList();
     List<LibraryProjectResponse> childProjects =
         libraryProjectRepository.findActiveByUserIdAndParentProjectId(userId, project.getId())
             .stream()
@@ -125,7 +179,8 @@ public class MyLibraryService {
         savedAssetRepository.findActiveByUserId(
             userId,
             project.getId(),
-            null,
+            folderId,
+            true,
             normalizeNullableUpper(assetType),
             normalizeNullable(keyword));
     Map<Long, List<SavedAssetFile>> filesBySavedAssetId =
@@ -146,7 +201,23 @@ public class MyLibraryService {
             .toList();
 
     return new LibraryProjectContentsResponse(
-        toLibraryProjectResponse(project), childProjects, assets);
+        toLibraryProjectResponse(project),
+        currentFolder == null ? null : toFolderResponse(currentFolder),
+        breadcrumbs,
+        childProjects,
+        folders,
+        assets);
+  }
+
+  @Transactional(readOnly = true)
+  public LibraryProjectContentsResponse getProjectLibraryContents(
+      Long userId, Long sourceProjectId, Long folderId, String assetType, String keyword) {
+    LibraryProject project =
+        libraryProjectRepository
+            .findActiveByUserIdAndSourceProjectId(userId, sourceProjectId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.STORAGE_FOLDER_NOT_FOUND));
+
+    return getLibraryProjectContents(userId, project.getId(), folderId, assetType, keyword);
   }
 
   public LibraryProjectResponse updateLibraryProject(
@@ -157,36 +228,66 @@ public class MyLibraryService {
     return toLibraryProjectResponse(libraryProjectRepository.save(project));
   }
 
+  public StorageFolderResponse createFolder(
+      Long userId, Long libraryProjectId, CreateStorageFolderRequest request) {
+    findOwnedLibraryProject(userId, libraryProjectId);
+    Long parentFolderId = request.parentFolderId();
+    if (parentFolderId != null) {
+      findOwnedFolder(userId, libraryProjectId, parentFolderId);
+    }
+
+    StorageFolder folder =
+        StorageFolder.create(
+            userId,
+            libraryProjectId,
+            parentFolderId,
+            normalizeRequired(request.name()),
+            "CUSTOM",
+            null);
+
+    return toFolderResponse(storageFolderRepository.save(folder));
+  }
+
+  public StorageFolderResponse updateFolder(
+      Long userId, Long folderId, UpdateStorageFolderRequest request) {
+    StorageFolder folder = findOwnedFolder(userId, folderId);
+    folder.updateName(normalizeRequired(request.name()));
+
+    return toFolderResponse(storageFolderRepository.save(folder));
+  }
+
+  public void deleteFolder(Long userId, Long folderId) {
+    StorageFolder folder = findOwnedFolder(userId, folderId);
+    deleteFolderTree(userId, folder.getLibraryProjectId(), folder.getId());
+  }
+
   public void deleteLibraryProject(Long userId, Long libraryProjectId) {
     LibraryProject project = findOwnedLibraryProject(userId, libraryProjectId);
-    deleteProjectContents(userId, project.getId());
-
-    libraryProjectRepository.findActiveByUserIdAndParentProjectId(userId, project.getId()).stream()
-        .forEach(
-            childProject -> {
-              deleteProjectContents(userId, childProject.getId());
-              childProject.delete();
-              libraryProjectRepository.save(childProject);
-            });
-
-    project.delete();
-    libraryProjectRepository.save(project);
+    deleteLibraryProjectTree(userId, project);
   }
 
   public SavedAssetResponse saveAsset(Long userId, SaveAssetRequest request) {
-    LibraryProject project = findOwnedLibraryProject(userId, request.libraryProjectId());
     String sourceType = resolveSourceType(request);
+    SourceContext sourceContext = resolveSourceContext(userId, sourceType, request);
+    LibraryProject project =
+        resolveTargetLibraryProject(
+            userId, request.libraryProjectId(), request.folderId(), sourceContext.sourceChat());
+    Long folderId = resolveTargetFolderId(userId, project.getId(), request.folderId());
 
     if (SOURCE_TYPE_CHAT_MESSAGE_FILE.equals(sourceType)) {
-      return saveChatMessageFileAsset(userId, project, request);
+      return saveChatMessageFileAsset(userId, project, folderId, sourceContext, request);
     }
 
-    return saveGeneratedAsset(userId, project, request);
+    return saveGeneratedAsset(userId, project, folderId, sourceContext, request);
   }
 
   private SavedAssetResponse saveGeneratedAsset(
-      Long userId, LibraryProject project, SaveAssetRequest request) {
-    GeneratedAsset generatedAsset = findOwnedGeneratedAsset(userId, request.generatedAssetId());
+      Long userId,
+      LibraryProject project,
+      Long folderId,
+      SourceContext sourceContext,
+      SaveAssetRequest request) {
+    GeneratedAsset generatedAsset = sourceContext.generatedAsset();
     String assetType = normalizeAssetType(generatedAsset.getAssetType());
 
     SavedAsset savedAsset =
@@ -194,7 +295,7 @@ public class MyLibraryService {
             SavedAsset.create(
                 userId,
                 project.getId(),
-                null,
+                folderId,
                 generatedAsset.getId(),
                 SOURCE_TYPE_GENERATED_ASSET,
                 generatedAsset.getChatId(),
@@ -210,9 +311,13 @@ public class MyLibraryService {
   }
 
   private SavedAssetResponse saveChatMessageFileAsset(
-      Long userId, LibraryProject project, SaveAssetRequest request) {
-    ChatMessageFile sourceFile = findOwnedChatMessageFile(userId, request.chatMessageFileId());
-    ChatMessage sourceMessage = findActiveMessage(sourceFile.getMessageId());
+      Long userId,
+      LibraryProject project,
+      Long folderId,
+      SourceContext sourceContext,
+      SaveAssetRequest request) {
+    ChatMessageFile sourceFile = sourceContext.chatMessageFile();
+    ChatMessage sourceMessage = sourceContext.sourceMessage();
     String assetType = normalizeFileAssetType(sourceFile.getFileType(), sourceFile.getMimeType());
 
     SavedAsset savedAsset =
@@ -220,7 +325,7 @@ public class MyLibraryService {
             SavedAsset.create(
                 userId,
                 project.getId(),
-                null,
+                folderId,
                 null,
                 SOURCE_TYPE_CHAT_MESSAGE_FILE,
                 sourceMessage.getChatId(),
@@ -247,6 +352,7 @@ public class MyLibraryService {
             userId,
             libraryProjectId,
             null,
+            false,
             normalizeNullableUpper(assetType),
             normalizeNullable(keyword));
     Map<Long, List<SavedAssetFile>> filesBySavedAssetId =
@@ -289,12 +395,94 @@ public class MyLibraryService {
   }
 
   private void deleteProjectContents(Long userId, Long libraryProjectId) {
-    savedAssetRepository.findActiveByUserId(userId, libraryProjectId, null, null, null).stream()
+    savedAssetRepository.findActiveByUserId(userId, libraryProjectId, null, false, null, null).stream()
         .forEach(
             savedAsset -> {
               savedAsset.delete();
               savedAssetRepository.save(savedAsset);
             });
+
+    storageFolderRepository.findActiveByLibraryProjectId(userId, libraryProjectId).stream()
+        .forEach(
+            folder -> {
+              folder.delete();
+              storageFolderRepository.save(folder);
+            });
+  }
+
+  private void deleteLibraryProjectTree(Long userId, LibraryProject project) {
+    libraryProjectRepository.findActiveByUserIdAndParentProjectId(userId, project.getId()).stream()
+        .forEach(childProject -> deleteLibraryProjectTree(userId, childProject));
+
+    deleteProjectContents(userId, project.getId());
+    project.delete();
+    libraryProjectRepository.save(project);
+  }
+
+  private void deleteFolderTree(Long userId, Long libraryProjectId, Long folderId) {
+    storageFolderRepository
+        .findActiveByLibraryProjectIdAndParentFolderId(userId, libraryProjectId, folderId)
+        .forEach(child -> deleteFolderTree(userId, libraryProjectId, child.getId()));
+
+    savedAssetRepository.findActiveByUserId(userId, libraryProjectId, folderId, true, null, null).stream()
+        .forEach(
+            savedAsset -> {
+              savedAsset.delete();
+              savedAssetRepository.save(savedAsset);
+            });
+
+    StorageFolder folder = findOwnedFolder(userId, libraryProjectId, folderId);
+    folder.delete();
+    storageFolderRepository.save(folder);
+  }
+
+  private SourceContext resolveSourceContext(
+      Long userId, String sourceType, SaveAssetRequest request) {
+    if (SOURCE_TYPE_CHAT_MESSAGE_FILE.equals(sourceType)) {
+      ChatMessageFile file = findOwnedChatMessageFile(userId, request.chatMessageFileId());
+      ChatMessage message = findActiveMessage(file.getMessageId());
+      Chat chat = findOwnedSourceChat(userId, message.getChatId());
+
+      return new SourceContext(null, file, message, chat);
+    }
+
+    GeneratedAsset generatedAsset = findOwnedGeneratedAsset(userId, request.generatedAssetId());
+    Chat chat = findOwnedSourceChat(userId, generatedAsset.getChatId());
+    ChatMessage message =
+        generatedAsset.getResponseMessageId() == null
+            ? null
+            : chatMessageRepository.findById(generatedAsset.getResponseMessageId()).orElse(null);
+
+    return new SourceContext(generatedAsset, null, message, chat);
+  }
+
+  private LibraryProject resolveTargetLibraryProject(
+      Long userId, Long requestedLibraryProjectId, Long folderId, Chat sourceChat) {
+    if (requestedLibraryProjectId != null) {
+      return findOwnedLibraryProject(userId, requestedLibraryProjectId);
+    }
+
+    if (folderId != null) {
+      StorageFolder folder = findOwnedFolder(userId, folderId);
+      return findOwnedLibraryProject(userId, folder.getLibraryProjectId());
+    }
+
+    if (sourceChat != null && sourceChat.getProjectId() != null) {
+      return libraryProjectRepository
+          .findActiveByUserIdAndSourceProjectId(userId, sourceChat.getProjectId())
+          .orElseThrow(() -> new BusinessException(ErrorCode.STORAGE_FOLDER_NOT_FOUND));
+    }
+
+    throw new BusinessException(ErrorCode.INVALID_INPUT);
+  }
+
+  private Long resolveTargetFolderId(Long userId, Long libraryProjectId, Long folderId) {
+    if (folderId == null) {
+      return null;
+    }
+
+    findOwnedFolder(userId, libraryProjectId, folderId);
+    return folderId;
   }
 
   private List<SavedAssetFile> copyGeneratedAssetFiles(Long userId, SavedAsset savedAsset) {
@@ -391,6 +579,41 @@ public class MyLibraryService {
     return project;
   }
 
+  private StorageFolder findOwnedFolder(Long userId, Long folderId) {
+    StorageFolder folder =
+        storageFolderRepository
+            .findById(folderId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.STORAGE_FOLDER_NOT_FOUND));
+
+    if (folder.isDeleted() || !folder.isOwnedBy(userId)) {
+      throw new BusinessException(ErrorCode.STORAGE_FOLDER_NOT_FOUND);
+    }
+
+    return folder;
+  }
+
+  private StorageFolder findOwnedFolder(Long userId, Long libraryProjectId, Long folderId) {
+    StorageFolder folder = findOwnedFolder(userId, folderId);
+    if (!libraryProjectId.equals(folder.getLibraryProjectId())) {
+      throw new BusinessException(ErrorCode.STORAGE_FOLDER_NOT_FOUND);
+    }
+
+    return folder;
+  }
+
+  private Chat findOwnedSourceChat(Long userId, Long chatId) {
+    Chat chat =
+        chatRepository
+            .findById(chatId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_INPUT));
+
+    if (chat.isDeleted() || !chat.isOwnedBy(userId)) {
+      throw new BusinessException(ErrorCode.INVALID_INPUT);
+    }
+
+    return chat;
+  }
+
   private SavedAsset findOwnedSavedAsset(Long userId, Long savedAssetId) {
     SavedAsset savedAsset =
         savedAssetRepository
@@ -457,6 +680,7 @@ public class MyLibraryService {
         project.getId(),
         project.getUserId(),
         project.getParentProjectId(),
+        project.getSourceProjectId(),
         project.getName(),
         project.getDepth(),
         project.getStatus(),
@@ -470,6 +694,7 @@ public class MyLibraryService {
         savedAsset.getId(),
         savedAsset.getUserId(),
         savedAsset.getLibraryProjectId(),
+        savedAsset.getFolderId(),
         savedAsset.getSourceGeneratedAssetId(),
         savedAsset.getSourceType(),
         savedAsset.getSourceChatId(),
@@ -509,7 +734,41 @@ public class MyLibraryService {
 
   private LibraryProjectSummaryResponse toLibraryProjectSummaryResponse(LibraryProject project) {
     return new LibraryProjectSummaryResponse(
-        project.getId(), project.getName(), project.getParentProjectId(), project.getDepth());
+        project.getId(),
+        project.getName(),
+        project.getParentProjectId(),
+        project.getSourceProjectId(),
+        project.getDepth());
+  }
+
+  private StorageFolderResponse toFolderResponse(StorageFolder folder) {
+    return new StorageFolderResponse(
+        folder.getId(),
+        folder.getUserId(),
+        folder.getLibraryProjectId(),
+        folder.getParentFolderId(),
+        folder.getName(),
+        folder.getStatus(),
+        folder.getCreatedAt(),
+        folder.getUpdatedAt());
+  }
+
+  private List<StorageFolderResponse> buildBreadcrumbs(
+      Long userId, Long libraryProjectId, StorageFolder currentFolder) {
+    if (currentFolder == null) {
+      return List.of();
+    }
+
+    List<StorageFolderResponse> reversed = new java.util.ArrayList<>();
+    StorageFolder cursor = currentFolder;
+    while (cursor != null) {
+      reversed.add(toFolderResponse(cursor));
+      Long parentFolderId = cursor.getParentFolderId();
+      cursor = parentFolderId == null ? null : findOwnedFolder(userId, libraryProjectId, parentFolderId);
+    }
+
+    java.util.Collections.reverse(reversed);
+    return reversed;
   }
 
   private LibrarySourceChatResponse toLibrarySourceChatResponse(Chat chat) {
@@ -720,4 +979,10 @@ public class MyLibraryService {
     String normalized = normalizeNullable(value);
     return normalized == null ? null : normalized.toUpperCase();
   }
+
+  private record SourceContext(
+      GeneratedAsset generatedAsset,
+      ChatMessageFile chatMessageFile,
+      ChatMessage sourceMessage,
+      Chat sourceChat) {}
 }

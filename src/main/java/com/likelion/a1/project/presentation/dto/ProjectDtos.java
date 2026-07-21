@@ -27,6 +27,7 @@ public final class ProjectDtos {
       String description,
       String status,
       Long defaultChatId,
+      Long libraryProjectId,
       OffsetDateTime createdAt,
       OffsetDateTime updatedAt) {}
 }
