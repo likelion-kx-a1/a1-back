@@ -18,6 +18,8 @@ public class LibraryProject {
 
   private Long parentProjectId;
 
+  private Long sourceProjectId;
+
   @Column(nullable = false, length = 150)
   private String name;
 
@@ -36,11 +38,17 @@ public class LibraryProject {
   private OffsetDateTime deletedAt;
 
   public static LibraryProject create(Long userId, Long parentProjectId, String name, int depth) {
+    return create(userId, parentProjectId, null, name, depth);
+  }
+
+  public static LibraryProject create(
+      Long userId, Long parentProjectId, Long sourceProjectId, String name, int depth) {
     LibraryProject project = new LibraryProject();
     OffsetDateTime now = OffsetDateTime.now();
 
     project.userId = userId;
     project.parentProjectId = parentProjectId;
+    project.sourceProjectId = sourceProjectId;
     project.name = name;
     project.depth = depth;
     project.status = "ACTIVE";
@@ -61,6 +69,11 @@ public class LibraryProject {
     this.status = "DELETED";
     this.deletedAt = now;
     this.updatedAt = now;
+  }
+
+  public void detachSourceProject() {
+    this.sourceProjectId = null;
+    this.updatedAt = OffsetDateTime.now();
   }
 
   public boolean isOwnedBy(Long userId) {

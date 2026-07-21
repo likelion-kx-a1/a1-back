@@ -1,0 +1,577 @@
+# a1-back — Gemini AI 동기화 상태 리포트
+
+- 목적: 기획/아키텍처 설계를 담당하는 Gemini AI가 백엔드 프로젝트(a1-back) 현재 상태를 코드 기준으로 100% 파악하기 위한 스냅샷.
+- 브랜치: feature/api
+- 생성 기준: 아래 각 섹션은 실제 저장소 파일을 그대로 읽어 취합한 것이며, 별도로 요약/각색하지 않았다.
+
+---
+
+## 1. 패키지 디렉토리 트리 (`src/main/java`)
+
+```
+com
+  likelion
+    a1
+      A1BackApplication.java
+      chat
+        domain
+          model
+            Chat.java
+            ChatMessage.java
+            MessageFile.java
+        presentation
+          dto
+            ChatDtos.java
+      generation
+        application
+          port
+            out
+              AiTextGenerationResult.java
+              FalGenerationPort.java
+              FalGenerationStatus.java
+              FalGenerationSubmission.java
+              ImageAnalysisPort.java
+              PromptGenerationPort.java
+          service
+            GenerationAiService.java
+            GenerationVideoPollingScheduler.java
+        domain
+          model
+            AiModel.java
+            GenerationJob.java
+            GenerationQueue.java
+            GenerationStatus.java
+            GenerationType.java
+          repository
+            GenerationJobRepository.java
+        infrastructure
+          client
+            claude
+              ClaudePromptGenerationAdapter.java
+              MockPromptGenerationAdapter.java
+            fal
+              FalGenerationAdapter.java
+              MockFalGenerationAdapter.java
+            openai
+              GptVisionImageAnalysisAdapter.java
+              MockImageAnalysisAdapter.java
+          persistence
+            GenerationJobRepository.java
+            GenerationJobRepositoryAdapter.java
+            SpringDataGenerationJobRepository.java
+        presentation
+          controller
+            GenerationController.java
+          dto
+            AiClientTestDtos.java
+            GenerationJobDtos.java
+      global
+        config
+          AiClientConfig.java
+          AwsConfig.java
+          SecurityConfig.java
+          WebConfig.java
+        exception
+          BusinessException.java
+          ErrorCode.java
+          ErrorResponse.java
+          GlobalExceptionHandler.java
+        response
+          ApiResponse.java
+      library
+        application
+          service
+            package-info.java
+        infrastructure
+          persistence
+            package-info.java
+        presentation
+          controller
+            package-info.java
+      media
+        application
+          port
+            out
+              MediaStoragePort.java
+          service
+            package-info.java
+        domain
+          model
+            Download.java
+            GeneratedMedia.java
+            GeneratedMediaFile.java
+            SavedFolder.java
+            SavedMedia.java
+        infrastructure
+          persistence
+            package-info.java
+          storage
+            local
+              MockMediaStorageAdapter.java
+            s3
+              S3MediaStorageAdapter.java
+        presentation
+          controller
+            package-info.java
+          dto
+            MediaDtos.java
+      notification
+        domain
+          model
+            Notification.java
+        presentation
+          dto
+            NotificationDtos.java
+      project
+        application
+          service
+            package-info.java
+        domain
+          model
+            Project.java
+        infrastructure
+          persistence
+            package-info.java
+        presentation
+          controller
+            package-info.java
+          dto
+            ProjectDtos.java
+      user
+        application
+          service
+            UserCommandService.java
+        domain
+          model
+            AuthSession.java
+            EmailVerification.java
+            PasswordResetToken.java
+            User.java
+          repository
+            UserRepository.java
+        infrastructure
+          persistence
+            SpringDataUserRepository.java
+            UserRepository.java
+            UserRepositoryAdapter.java
+        presentation
+          controller
+            UserController.java
+          dto
+            AuthDtos.java
+            RegisterUserRequest.java
+            UserResponse.java
+```
+
+> **참고 (사실 확인용)**: `generation`, `user` 도메인은 현재 코드상 **구 헥사고날 Port/Adapter 파일(`domain/repository/*Repository.java`, `infrastructure/persistence/*RepositoryAdapter.java`, `SpringDataXxxRepository.java`)과 신규 통합 파일(`infrastructure/persistence/XxxRepository.java`, `JpaRepository` 직접 상속)이 동시에 존재`한다. `library`, `media`(persistence), `project` 도메인은 아직 `package-info.java`만 있고 구현 코드가 없는 스캐폴딩 상태다.
+
+---
+
+## 2. DB/도메인 엔티티 및 Enum 전체 소스코드
+
+### `generation/domain/model/GenerationJob.java`
+
+```java
+package com.likelion.a1.generation.domain.model;
+
+import jakarta.persistence.*;
+import java.time.OffsetDateTime;
+import java.util.Map;
+import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Entity
+@Table(name = "generation_jobs")
+public class GenerationJob {
+  @Id
+  @GeneratedValue(strategy = jakarta.persistence.GenerationType.IDENTITY)
+  private Long id;
+
+  @Column(nullable = false)
+  private Long userId;
+
+  @Column(nullable = false)
+  private Long chatId;
+
+  private Long aiModelId;
+  private Long requestMessageId;
+
+  @Column(nullable = false, length = 50)
+  private String jobType;
+
+  @Column(columnDefinition = "text")
+  private String prompt;
+
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(columnDefinition = "jsonb")
+  private Map<String, Object> requestPayload;
+
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(columnDefinition = "jsonb")
+  private Map<String, Object> responsePayload;
+
+  @Column(nullable = false, length = 30)
+  private String status = "PENDING";
+
+  @Column(columnDefinition = "text")
+  private String errorMessage;
+
+  private OffsetDateTime startedAt;
+  private OffsetDateTime completedAt;
+
+  @Column(nullable = false)
+  private OffsetDateTime createdAt;
+
+  @Column(nullable = false)
+  private OffsetDateTime updatedAt;
+
+  public static GenerationJob create(
+      Long userId,
+      Long chatId,
+      Long aiModelId,
+      Long requestMessageId,
+      String jobType,
+      String prompt,
+      Map<String, Object> requestPayload) {
+    GenerationJob job = new GenerationJob();
+    job.userId = userId;
+    job.chatId = chatId;
+    job.aiModelId = aiModelId;
+    job.requestMessageId = requestMessageId;
+    job.jobType = jobType;
+    job.prompt = prompt;
+    job.requestPayload = requestPayload;
+    job.status = GenerationStatus.PROCESSING.name();
+    job.startedAt = OffsetDateTime.now();
+    job.createdAt = job.startedAt;
+    job.updatedAt = job.startedAt;
+    return job;
+  }
+
+  public void markQueued(Map<String, Object> responsePayload) {
+    applyStatus(GenerationStatus.QUEUED, responsePayload, null);
+  }
+
+  public void complete(Map<String, Object> responsePayload) {
+    applyStatus(GenerationStatus.COMPLETED, responsePayload, null);
+  }
+
+  public void fail(String errorMessage) {
+    applyStatus(GenerationStatus.FAILED, this.responsePayload, errorMessage);
+  }
+
+  public void applyPolledStatus(GenerationStatus status, Map<String, Object> responsePayload) {
+    applyStatus(status, responsePayload, null);
+  }
+
+  private void applyStatus(GenerationStatus status, Map<String, Object> responsePayload, String errorMessage) {
+    this.status = status.name();
+    this.responsePayload = responsePayload;
+    this.errorMessage = errorMessage;
+    this.updatedAt = OffsetDateTime.now();
+    if (status == GenerationStatus.COMPLETED || status == GenerationStatus.FAILED) {
+      this.completedAt = this.updatedAt;
+    }
+  }
+}
+```
+
+### `generation/domain/model/GenerationType.java` (Enum)
+
+```java
+package com.likelion.a1.generation.domain.model;
+
+public enum GenerationType {
+  IMAGE_GENERATION,
+  VIDEO_GENERATION,
+  REVERSE_PROMPT,
+  IMAGE_VARIATION,
+  PROMPT_REGENERATION;
+
+  public String mediaType() {
+    return switch (this) {
+      case IMAGE_GENERATION, IMAGE_VARIATION -> "IMAGE";
+      case VIDEO_GENERATION -> "VIDEO";
+      case REVERSE_PROMPT, PROMPT_REGENERATION -> "TEXT";
+    };
+  }
+}
+```
+
+### `generation/domain/model/GenerationStatus.java` (Enum)
+
+```java
+package com.likelion.a1.generation.domain.model;
+
+public enum GenerationStatus {
+  PENDING,
+  QUEUED,
+  PROCESSING,
+  COMPLETED,
+  FAILED,
+  CANCELED,
+  EXPIRED;
+
+  public static GenerationStatus fromFalStatus(String falStatus) {
+    return switch (falStatus) {
+      case "IN_QUEUE" -> QUEUED;
+      case "IN_PROGRESS" -> PROCESSING;
+      case "COMPLETED" -> COMPLETED;
+      default -> FAILED;
+    };
+  }
+}
+```
+
+### `generation/domain/model/GenerationQueue.java`
+
+```java
+package com.likelion.a1.generation.domain.model;
+
+import jakarta.persistence.*;
+import java.time.OffsetDateTime;
+import lombok.*;
+
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Entity
+@Table(name = "generation_queue")
+public class GenerationQueue {
+  @Id
+  @GeneratedValue(strategy = jakarta.persistence.GenerationType.IDENTITY)
+  private Long id;
+
+  @Column(nullable = false)
+  private Long generationJobId;
+
+  @Column(nullable = false)
+  private int priority;
+
+  @Column(nullable = false, length = 30)
+  private String status = "WAITING";
+
+  @Column(nullable = false)
+  private int retryCount;
+
+  @Column(nullable = false)
+  private int maxRetryCount = 3;
+
+  private OffsetDateTime availableAt;
+  private OffsetDateTime lockedAt;
+
+  @Column(length = 100)
+  private String lockedBy;
+
+  @Column(nullable = false)
+  private OffsetDateTime createdAt;
+
+  @Column(nullable = false)
+  private OffsetDateTime updatedAt;
+}
+```
+
+### `generation/domain/model/AiModel.java`
+
+```java
+package com.likelion.a1.generation.domain.model;
+
+import jakarta.persistence.*;
+import java.time.OffsetDateTime;
+import lombok.*;
+
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Entity
+@Table(name = "ai_models")
+public class AiModel {
+  @Id
+  @GeneratedValue(strategy = jakarta.persistence.GenerationType.IDENTITY)
+  private Long id;
+
+  @Column(nullable = false, length = 100)
+  private String name;
+
+  @Column(nullable = false, length = 100)
+  private String provider;
+
+  @Column(nullable = false, unique = true, length = 100)
+  private String modelCode;
+
+  @Column(nullable = false, length = 30)
+  private String modelType;
+
+  @Column(columnDefinition = "text")
+  private String description;
+
+  @Column(nullable = false)
+  private boolean isActive = true;
+
+  @Column(nullable = false)
+  private OffsetDateTime createdAt;
+
+  @Column(nullable = false)
+  private OffsetDateTime updatedAt;
+}
+```
+
+---
+
+## 3. 외부 연동용 Port 인터페이스 전체 소스코드
+
+### `generation/application/port/out/PromptGenerationPort.java`
+
+```java
+package com.likelion.a1.generation.application.port.out;
+
+/** Claude Sonnet API - 사진을 분석해 생성용 프롬프트를 만든다. */
+public interface PromptGenerationPort {
+  AiTextGenerationResult generateFromImage(byte[] imageBytes, String mimeType, String instruction);
+}
+```
+
+### `generation/application/port/out/ImageAnalysisPort.java`
+
+```java
+package com.likelion.a1.generation.application.port.out;
+
+/** GPT-4.1 Vision - 사진을 역프롬프팅해 스타일/구도 등 속성을 추출한다. */
+public interface ImageAnalysisPort {
+  AiTextGenerationResult analyze(byte[] imageBytes, String mimeType, String instruction);
+}
+```
+
+### `generation/application/port/out/FalGenerationPort.java`
+
+```java
+package com.likelion.a1.generation.application.port.out;
+
+import java.util.Map;
+
+/**
+ * fal.ai 큐 API. modelCode로 이미지·영상 모델을 모두 받는다
+ * (예: openai/gpt-image-2, fal-ai/kling-video/o3/pro/text-to-video, bytedance/seedance-2.0/mini/image-to-video).
+ */
+public interface FalGenerationPort {
+  FalGenerationSubmission submit(String modelCode, Map<String, Object> input);
+
+  FalGenerationStatus poll(String modelCode, String externalRequestId);
+}
+```
+
+### `media/application/port/out/MediaStoragePort.java`
+
+```java
+package com.likelion.a1.media.application.port.out;
+
+public interface MediaStoragePort {
+  String store(byte[] content, String contentType, String extension);
+
+  /**
+   * 외부 API(fal.ai 등)가 반환한 임시 URL의 미디어를 메모리에 통째로 버퍼링하지 않고 스트림으로
+   * 열어 바로 저장소로 업로드한다. 대용량 비디오 파일을 다룰 때 힙 메모리 사용을 최소화한다.
+   */
+  String storeFromUrl(String temporaryUrl, String contentType, String extension);
+}
+```
+
+### 부속 결과 타입 (Port 리턴 값)
+
+`generation/application/port/out/AiTextGenerationResult.java`
+```java
+package com.likelion.a1.generation.application.port.out;
+
+import java.util.Map;
+
+public record AiTextGenerationResult(String text, Map<String, Object> rawResponse) {}
+```
+
+`generation/application/port/out/FalGenerationSubmission.java`
+```java
+package com.likelion.a1.generation.application.port.out;
+
+import java.util.Map;
+
+public record FalGenerationSubmission(
+    String externalRequestId, String statusUrl, String responseUrl, Map<String, Object> rawResponse) {}
+```
+
+`generation/application/port/out/FalGenerationStatus.java`
+```java
+package com.likelion.a1.generation.application.port.out;
+
+import java.util.Map;
+
+public record FalGenerationStatus(String status, Map<String, Object> rawResponse) {}
+```
+
+---
+
+## 4. Configuration — `src/main/resources/application.yml`
+
+> 저장소에는 `application.yml` 하나만 존재한다 (`application-local.yml`/`application-prod.yml` 별도 파일 없음). 프로필 분기는 `@Profile("local")` / `@Profile("!local")` 어노테이션으로 Java 코드 레벨에서 처리되고, 기본 활성 프로필은 `spring.profiles.default: local`이다.
+>
+> **보안 상태**: 아래 파일의 모든 민감 값(`DB_PASSWORD`, `AWS_SECRET_ACCESS_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `FAL_API_KEY` 등)은 이미 `${VAR:기본값}` 형태의 환경변수 참조이며, 확인 결과 AI 공급자 3종의 디폴트 값은 빈 문자열로 파라미터화되어 있어 이 파일 자체에는 마스킹할 실제 시크릿이 없다. 실제 값은 배포/로컬 환경의 `.env`에서 주입된다. 아래는 원본 그대로이며 별도 마스킹을 추가하지 않았다.
+
+```yaml
+spring:
+  application:
+    name: a1-back
+  profiles:
+    default: local
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/a1}
+    username: ${DB_USERNAME:a1}
+    password: ${DB_PASSWORD:REDACTED}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  storage:
+    region: ${AWS_REGION:ap-northeast-2}
+    bucket: ${STORAGE_BUCKET:a1-media}
+    public-base-url: ${STORAGE_PUBLIC_BASE_URL:}
+    endpoint: ${STORAGE_ENDPOINT:}
+    path-style-access: ${STORAGE_PATH_STYLE_ACCESS:false}
+  ai:
+    fal:
+      base-url: ${FAL_BASE_URL:https://queue.fal.run}
+      api-key: ${FAL_API_KEY:}
+    claude:
+      base-url: ${CLAUDE_BASE_URL:https://api.anthropic.com}
+      api-key: ${ANTHROPIC_API_KEY:}
+      model: ${CLAUDE_MODEL:claude-sonnet-5}
+      version: ${ANTHROPIC_VERSION:2023-06-01}
+    openai:
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      api-key: ${OPENAI_API_KEY:}
+      model: ${OPENAI_VISION_MODEL:gpt-4.1}
+```
+
+> 참고: 로컬 개발용 `local-password` 계열 기본값(`DB_PASSWORD` 등)은 실서비스 자격증명이 아니라 Docker Compose 로컬 컨테이너용 더미 값이라 원문 대신 `REDACTED`로 표기했다.
+
+---
+
+## 5. 관련 실무 문서 포인터 (Gemini가 추가 맥락이 필요할 때 참고)
+
+- API 계약: `docs_h/API_명세서.md`
+- 아키텍처 배경/로드맵: `docs_h/아키텍처_가이드.md`
+- 로컬 실행/온보딩: `docs_h/로컬_개발환경_설정_가이드.md`
+- 알려진 이슈/보안 미해결 사항: `docs_h/트러블슈팅_가이드.md`
+- Mock/실제 API 전환 및 테스트 결과: `docs_h/테스트_및_시뮬레이션_가이드.md`

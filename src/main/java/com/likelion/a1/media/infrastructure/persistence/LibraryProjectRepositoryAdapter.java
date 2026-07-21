@@ -35,4 +35,10 @@ public class LibraryProjectRepositoryAdapter implements LibraryProjectRepository
     return repository.findByUserIdAndParentProjectIdAndStatusOrderByCreatedAtDesc(
         userId, parentProjectId, "ACTIVE");
   }
+
+  @Override
+  public Optional<LibraryProject> findActiveByUserIdAndSourceProjectId(
+      Long userId, Long sourceProjectId) {
+    return repository.findByUserIdAndSourceProjectIdAndStatus(userId, sourceProjectId, "ACTIVE");
+  }
 }

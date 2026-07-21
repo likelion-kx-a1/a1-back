@@ -56,4 +56,53 @@ public class GenerationJob {
 
   @Column(nullable = false)
   private OffsetDateTime updatedAt;
+
+  public static GenerationJob create(
+      Long userId,
+      Long chatId,
+      Long aiModelId,
+      Long requestMessageId,
+      String jobType,
+      String prompt,
+      Map<String, Object> requestPayload) {
+    GenerationJob job = new GenerationJob();
+    job.userId = userId;
+    job.chatId = chatId;
+    job.aiModelId = aiModelId;
+    job.requestMessageId = requestMessageId;
+    job.generationType = jobType;
+    job.prompt = prompt;
+    job.requestPayload = requestPayload;
+    job.status = GenerationStatus.PROCESSING.name();
+    job.startedAt = OffsetDateTime.now();
+    job.createdAt = job.startedAt;
+    job.updatedAt = job.startedAt;
+    return job;
+  }
+
+  public void markQueued(Map<String, Object> responsePayload) {
+    applyStatus(GenerationStatus.QUEUED, responsePayload, null);
+  }
+
+  public void complete(Map<String, Object> responsePayload) {
+    applyStatus(GenerationStatus.COMPLETED, responsePayload, null);
+  }
+
+  public void fail(String errorMessage) {
+    applyStatus(GenerationStatus.FAILED, this.responsePayload, errorMessage);
+  }
+
+  public void applyPolledStatus(GenerationStatus status, Map<String, Object> responsePayload) {
+    applyStatus(status, responsePayload, null);
+  }
+
+  private void applyStatus(GenerationStatus status, Map<String, Object> responsePayload, String errorMessage) {
+    this.status = status.name();
+    this.responsePayload = responsePayload;
+    this.errorMessage = errorMessage;
+    this.updatedAt = OffsetDateTime.now();
+    if (status == GenerationStatus.COMPLETED || status == GenerationStatus.FAILED) {
+      this.completedAt = this.updatedAt;
+    }
+  }
 }
