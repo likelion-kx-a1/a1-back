@@ -19,7 +19,6 @@ import java.util.Map;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientResponseException;
@@ -327,14 +326,12 @@ public class GenerationAiService {
     newStatus = generatedMediaUploader.applyCompletion(job, newStatus, merged);
 
     job.applyPolledStatus(newStatus, merged);
-    try {
-      return generationJobRepository.save(job);
-    } catch (OptimisticLockingFailureException exception) {
-      // 백그라운드 스케줄러가 같은 job을 먼저 커밋한 경우. 실패로 처리하지 않고 방금 커밋된 최신 상태를
-      // 그대로 조회해 돌려준다 — 클라이언트 입장에선 어차피 "완료됐다"는 같은 결론을 받게 된다.
-      log.info("Job {} 동시 완료 처리 충돌 감지 — 다른 폴러가 이미 저장한 최신 상태를 반환합니다.", jobId);
-      return findJob(jobId);
-    }
+    // OptimisticLockingFailureException을 여기서 잡지 않는다: Hibernate가 버전 충돌이 나는 순간
+    // 이 트랜잭션을 이미 rollback-only로 표시하기 때문에, 이 메서드 안에서 잡아서 "복구"를 시도해도
+    // 메서드가 정상 반환된 뒤 커밋 시점에 UnexpectedRollbackException으로 터진다(실측 확인됨).
+    // 그대로 던져 트랜잭션이 깨끗하게 롤백되게 하고, 복구(재조회)는 트랜잭션 경계 밖인
+    // GenerationController에서 한 번 재시도하는 방식으로 처리한다.
+    return generationJobRepository.save(job);
   }
 
   /**
