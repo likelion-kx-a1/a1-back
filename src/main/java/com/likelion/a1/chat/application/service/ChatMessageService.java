@@ -110,6 +110,25 @@ public class ChatMessageService {
     messageRepository.save(message);
   }
 
+  /**
+   * {@link com.likelion.a1.generation.application.service.GenerationResultService}가 방금 만든
+   * 어시스턴트 메시지를, 그 결과를 만들어낸 GenerationJob/GeneratedAsset과 연결한다. 채팅방 소유권은
+   * 이미 그 메시지를 만드는 과정에서 확인됐으므로 여기서 다시 검증하지 않는다.
+   */
+  public MessageResponse attachGenerationResult(
+      Long messageId, Long generationJobId, Long generatedAssetId) {
+    ChatMessage message =
+        messageRepository
+            .findById(messageId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_INPUT));
+    message.associateGenerationResult(generationJobId, generatedAssetId);
+
+    ChatMessage savedMessage = messageRepository.save(message);
+    List<ChatMessageFile> files = fileRepository.findByMessageIds(List.of(savedMessage.getId()));
+
+    return toResponse(savedMessage, files);
+  }
+
   private ChatMessage findMessageInChat(Long chatId, Long messageId) {
     ChatMessage message =
         messageRepository
