@@ -4,6 +4,7 @@ import com.likelion.a1.chat.presentation.dto.ChatDtos.MessageFileRequest;
 import com.likelion.a1.generation.domain.model.GenerationJob;
 import com.likelion.a1.generation.domain.model.GenerationStatus;
 import com.likelion.a1.generation.domain.model.GenerationType;
+import com.likelion.a1.generation.domain.repository.GenerationJobRepository;
 import com.likelion.a1.media.application.port.out.MediaStoragePort;
 import com.likelion.a1.media.application.port.out.StorageUploadCommand;
 import com.likelion.a1.media.application.port.out.StorageUploadResult;
@@ -12,6 +13,8 @@ import java.time.OffsetDateTime;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
@@ -24,13 +27,20 @@ import org.springframework.web.client.RestTemplate;
  */
 @Component
 class GeneratedMediaUploader {
+  private static final Logger log = LoggerFactory.getLogger(GeneratedMediaUploader.class);
+
   private final MediaStoragePort mediaStoragePort;
   private final GenerationResultService generationResultService;
+  private final GenerationJobRepository generationJobRepository;
   private final RestTemplate restTemplate = new RestTemplate();
 
-  GeneratedMediaUploader(MediaStoragePort mediaStoragePort, GenerationResultService generationResultService) {
+  GeneratedMediaUploader(
+      MediaStoragePort mediaStoragePort,
+      GenerationResultService generationResultService,
+      GenerationJobRepository generationJobRepository) {
     this.mediaStoragePort = mediaStoragePort;
     this.generationResultService = generationResultService;
+    this.generationJobRepository = generationJobRepository;
   }
 
   /**
@@ -41,18 +51,27 @@ class GeneratedMediaUploader {
    * 변형(mutate)한다.
    */
   GenerationStatus applyCompletion(GenerationJob job, GenerationStatus status, Map<String, Object> payload) {
-    if (status == GenerationStatus.FAILED) {
-      generationResultService.finishGenerating(job.getUserId(), job.getChatId());
+    if (status != GenerationStatus.COMPLETED && status != GenerationStatus.FAILED) {
       return status;
     }
 
-    if (status != GenerationStatus.COMPLETED) {
+    // 동시성 방어: getStatus 수동 폴링과 5초 스케줄러가 같은 job을 거의 동시에 종결 처리하려는 경우,
+    // 둘 중 하나가 먼저 커밋을 마쳤다면 DB에서 이미 종결 상태를 볼 수 있다 — 그 경우 S3 재업로드나
+    // 채팅 메시지/에셋 중복 생성을 하지 않고 스킵한다. (호출자가 들고 있는 stale in-memory job으로 마저
+    // 진행하더라도, 뒤이은 저장에서 @Version 낙관적 락이 최종 방어선 역할을 한다.)
+    if (isAlreadyFinalized(job.getId())) {
+      log.info("Job {} 은(는) 이미 다른 폴러가 완료 처리함 — 중복 처리를 스킵합니다.", job.getId());
+      return status;
+    }
+
+    if (status == GenerationStatus.FAILED) {
+      safeFinishGenerating(job);
       return status;
     }
 
     String temporaryUrl = extractMediaUrl(payload);
     if (temporaryUrl == null) {
-      generationResultService.finishGenerating(job.getUserId(), job.getChatId());
+      safeFinishGenerating(job);
       return status;
     }
 
@@ -68,8 +87,40 @@ class GeneratedMediaUploader {
 
       return status;
     } catch (RuntimeException exception) {
-      generationResultService.finishGenerating(job.getUserId(), job.getChatId());
+      log.warn("Job {} 완료 처리 실패 — FAILED로 강등합니다.", job.getId(), exception);
+      safeFinishGenerating(job);
       return GenerationStatus.FAILED;
+    }
+  }
+
+  private boolean isAlreadyFinalized(Long jobId) {
+    return generationJobRepository
+        .findById(jobId)
+        .map(current -> isTerminalStatus(current.getStatus()))
+        .orElse(false);
+  }
+
+  private boolean isTerminalStatus(String status) {
+    return GenerationStatus.COMPLETED.name().equals(status)
+        || GenerationStatus.FAILED.name().equals(status)
+        || GenerationStatus.CANCELED.name().equals(status)
+        || GenerationStatus.EXPIRED.name().equals(status);
+  }
+
+  /**
+   * job의 채팅방이 폴링 도중 삭제되는 등의 사유로 {@code finishGenerating}이 실패해도, 이 호출은
+   * {@link GenerationVideoPollingScheduler}의 배치 트랜잭션 전체(다른 job들 포함)나
+   * {@link GenerationAiService#getStatus} 응답을 망가뜨리지 않고 로그만 남기고 넘어가야 한다.
+   */
+  private void safeFinishGenerating(GenerationJob job) {
+    try {
+      generationResultService.finishGenerating(job.getUserId(), job.getChatId());
+    } catch (RuntimeException exception) {
+      log.warn(
+          "Job {} 종결 처리 중 Chat.isGenerating 해제 실패(chatId={}) — 무시하고 계속 진행합니다.",
+          job.getId(),
+          job.getChatId(),
+          exception);
     }
   }
 
