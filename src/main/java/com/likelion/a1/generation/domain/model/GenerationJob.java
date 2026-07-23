@@ -57,6 +57,10 @@ public class GenerationJob {
   @Column(nullable = false)
   private OffsetDateTime updatedAt;
 
+  @Version
+  @Column(nullable = false)
+  private Long version;
+
   public static GenerationJob create(
       Long userId,
       Long chatId,
