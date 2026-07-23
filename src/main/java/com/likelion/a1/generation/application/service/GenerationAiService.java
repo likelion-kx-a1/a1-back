@@ -32,18 +32,21 @@ public class GenerationAiService {
   private final ImageAnalysisPort imageAnalysisPort;
   private final FalGenerationPort falGenerationPort;
   private final GeneratedMediaUploader generatedMediaUploader;
+  private final GenerationResultService generationResultService;
 
   public GenerationAiService(
       GenerationJobRepository generationJobRepository,
       PromptGenerationPort promptGenerationPort,
       ImageAnalysisPort imageAnalysisPort,
       FalGenerationPort falGenerationPort,
-      GeneratedMediaUploader generatedMediaUploader) {
+      GeneratedMediaUploader generatedMediaUploader,
+      GenerationResultService generationResultService) {
     this.generationJobRepository = generationJobRepository;
     this.promptGenerationPort = promptGenerationPort;
     this.imageAnalysisPort = imageAnalysisPort;
     this.falGenerationPort = falGenerationPort;
     this.generatedMediaUploader = generatedMediaUploader;
+    this.generationResultService = generationResultService;
   }
 
   public GenerationJob regeneratePrompt(
@@ -63,6 +66,7 @@ public class GenerationAiService {
                 GenerationType.PROMPT_REGENERATION.name(),
                 instruction,
                 requestPayload));
+    generationResultService.startGenerating(userId, chatId);
 
     try {
       long startedAtMs = System.currentTimeMillis();
@@ -73,9 +77,12 @@ public class GenerationAiService {
       PerformanceMetrics.record(responsePayload, "refineDurationMs", refineDurationMs);
       PerformanceMetrics.announce(job.getId(), responsePayload);
       job.complete(responsePayload);
+      generationResultService.saveAssistantTextResult(
+          userId, chatId, job.getRequestMessageId(), result.text(), null, null);
     } catch (RestClientResponseException exception) {
       job.fail(exception.getMessage());
       generationJobRepository.save(job);
+      generationResultService.finishGenerating(userId, chatId);
       throw exception;
     }
 
@@ -93,6 +100,7 @@ public class GenerationAiService {
         generationJobRepository.save(
             GenerationJob.create(
                 userId, chatId, null, null, GenerationType.REVERSE_PROMPT.name(), instruction, requestPayload));
+    generationResultService.startGenerating(userId, chatId);
 
     try {
       long startedAtMs = System.currentTimeMillis();
@@ -103,9 +111,12 @@ public class GenerationAiService {
       PerformanceMetrics.record(responsePayload, "analysisDurationMs", analysisDurationMs);
       PerformanceMetrics.announce(job.getId(), responsePayload);
       job.complete(responsePayload);
+      generationResultService.saveAssistantTextResult(
+          userId, chatId, job.getRequestMessageId(), result.text(), null, null);
     } catch (RestClientResponseException exception) {
       job.fail(exception.getMessage());
       generationJobRepository.save(job);
+      generationResultService.finishGenerating(userId, chatId);
       throw exception;
     }
 
@@ -145,6 +156,7 @@ public class GenerationAiService {
     GenerationJob job =
         generationJobRepository.save(
             GenerationJob.create(userId, chatId, null, null, type.name(), finalPrompt, requestPayload));
+    generationResultService.startGenerating(userId, chatId);
 
     try {
       long startedAtMs = System.currentTimeMillis();
@@ -162,9 +174,12 @@ public class GenerationAiService {
     } catch (RestClientResponseException exception) {
       job.fail(exception.getMessage());
       generationJobRepository.save(job);
+      generationResultService.finishGenerating(userId, chatId);
       throw exception;
     }
 
+    // 실제 완료 처리(채팅 메시지/에셋 저장, isGenerating 해제)는 비동기 완료 시점
+    // (getStatus 수동 폴링 또는 GenerationVideoPollingScheduler)에 GeneratedMediaUploader가 수행한다.
     return generationJobRepository.save(job);
   }
 
@@ -203,6 +218,7 @@ public class GenerationAiService {
         generationJobRepository.save(
             GenerationJob.create(
                 userId, chatId, null, null, GenerationType.VIDEO_GENERATION.name(), prompt, requestPayload));
+    generationResultService.startGenerating(userId, chatId);
 
     try {
       Map<String, Object> responsePayload = new LinkedHashMap<>();
@@ -246,9 +262,12 @@ public class GenerationAiService {
     } catch (RestClientResponseException exception) {
       job.fail(exception.getMessage());
       generationJobRepository.save(job);
+      generationResultService.finishGenerating(userId, chatId);
       throw exception;
     }
 
+    // 실제 완료 처리(채팅 메시지/에셋 저장, isGenerating 해제)는 비동기 완료 시점
+    // (getStatus 수동 폴링 또는 GenerationVideoPollingScheduler)에 GeneratedMediaUploader가 수행한다.
     return generationJobRepository.save(job);
   }
 
