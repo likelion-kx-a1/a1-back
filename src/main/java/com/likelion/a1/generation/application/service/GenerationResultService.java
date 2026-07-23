@@ -70,6 +70,7 @@ public class GenerationResultService {
       Long userId,
       Long chatId,
       Long parentMessageId,
+      Long generationJobId,
       String contentText,
       String generationType,
       String imageCategory) {
@@ -86,9 +87,12 @@ public class GenerationResultService {
                 parentMessageId,
                 List.of()));
 
+    MessageResponse withResult =
+        chatMessageService.attachGenerationResult(message.messageId(), generationJobId, null);
+
     chatService.finishGenerating(userId, chatId);
 
-    return new AssistantResultResponse(message, null);
+    return new AssistantResultResponse(withResult, null);
   }
 
   public AssistantResultResponse saveAssistantAssetResult(
@@ -139,9 +143,12 @@ public class GenerationResultService {
             .map(file -> toAssetFile(asset.getId(), file))
             .toList());
 
+    MessageResponse withResult =
+        chatMessageService.attachGenerationResult(message.messageId(), generationJobId, asset.getId());
+
     chatService.finishGenerating(userId, chatId);
 
-    return new AssistantResultResponse(message, asset.getId());
+    return new AssistantResultResponse(withResult, asset.getId());
   }
 
   public void startGenerating(Long userId, Long chatId) {
