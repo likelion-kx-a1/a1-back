@@ -83,6 +83,13 @@ public class ChatMessage {
     this.updatedAt = OffsetDateTime.now();
   }
 
+  /** AI 생성 파이프라인이 이 메시지를 만들어낸 GenerationJob/GeneratedAsset과 연결한다. */
+  public void associateGenerationResult(Long generationJobId, Long generatedAssetId) {
+    this.generationJobId = generationJobId;
+    this.generatedAssetId = generatedAssetId;
+    this.updatedAt = OffsetDateTime.now();
+  }
+
   public void delete() {
     this.status = "DELETED";
     this.updatedAt = OffsetDateTime.now();
