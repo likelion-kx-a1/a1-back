@@ -37,7 +37,12 @@ public class GenerationController {
     verifyOwnership(principal, request.userId());
     GenerationJob job =
         generationAiService.regeneratePrompt(
-            request.userId(), request.chatId(), request.imageBase64(), request.mimeType(), request.instruction());
+            request.userId(),
+            request.chatId(),
+            request.imageBase64(),
+            request.mimeType(),
+            request.instruction(),
+            request.parentMessageId());
     return ApiResponse.success(Response.from(job));
   }
 
@@ -47,7 +52,12 @@ public class GenerationController {
     verifyOwnership(principal, request.userId());
     GenerationJob job =
         generationAiService.reversePrompt(
-            request.userId(), request.chatId(), request.imageBase64(), request.mimeType(), request.instruction());
+            request.userId(),
+            request.chatId(),
+            request.imageBase64(),
+            request.mimeType(),
+            request.instruction(),
+            request.parentMessageId());
     return ApiResponse.success(Response.from(job));
   }
 
@@ -63,7 +73,8 @@ public class GenerationController {
             request.modelCode(),
             request.input(),
             request.sheetType(),
-            request.sheetValue());
+            request.sheetValue(),
+            request.parentMessageId());
     return ApiResponse.success(Response.from(job));
   }
 
@@ -80,7 +91,8 @@ public class GenerationController {
             request.prompt(),
             request.duration(),
             request.aspectRatio(),
-            request.refinePrompt());
+            request.refinePrompt(),
+            request.parentMessageId());
     return ApiResponse.success(Response.from(job));
   }
 
