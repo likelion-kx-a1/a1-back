@@ -1,11 +1,11 @@
 # a1-back — Gemini AI 동기화 상태 리포트
 
 - 목적: 기획/아키텍처 설계를 담당하는 Gemini AI가 백엔드 프로젝트(a1-back) 현재 상태를 코드 기준으로 100% 파악하기 위한 스냅샷.
-- 브랜치: dev (HEAD: `5087a28 Merge pull request #33 from likelion-kx-a1/feature/sse_asset`)
-- 생성 기준: 2026-07-23. 아래 각 섹션은 실제 저장소 파일을 그대로 읽어 취합한 것이며, 별도로 요약/각색하지 않았다.
-- 빌드/테스트 상태: `./gradlew clean build` 기준 컴파일 경고 0건, 전체 테스트(1건: `A1BackApplicationTests#contextLoads`) 통과. 이 저장소에는 이 컨텍스트 로드 테스트 외의 단위/통합 테스트가 없다.
+- 브랜치: dev로 머지 예정인 로컬 작업 브랜치 `chore/checkout` (HEAD: `842cfdb ref : 배치 전체 롤백 방지를 위해 GenerationJobPoller에 job별 처리를 위임하도록 스케줄러 단순화`). `dev`에서 분기한 뒤 아직 PR로 올라가지 않은 상태이며, `dev` 자체의 HEAD는 여전히 `5087a28`이다.
+- 생성 기준: 2026-07-23(같은 날짜 내에서 §2 이슈 1/3 해결, `GenerationResultService` 배선, 동시성 방어(낙관적 락) 도입까지 이어진 여러 커밋을 반영). 아래 각 섹션은 실제 저장소 파일을 그대로 읽어 취합한 것이며, 별도로 요약/각색하지 않았다.
+- 빌드/테스트 상태: `./gradlew clean build` 기준 컴파일 경고 0건, 전체 테스트(1건: `A1BackApplicationTests#contextLoads`) 통과. 이 저장소에는 이 컨텍스트 로드 테스트 외의 단위/통합 테스트가 없다. **이번 스냅샷의 동시성 수정은 자동 테스트가 아니라 로컬 Postgres(Docker Compose)에 실제로 붙여 동시 요청을 여러 번 재현시켜 검증했다(§6 참고) — 그 과정에서 실제 운영 버그(`UnexpectedRollbackException`) 하나를 발견해 함께 고쳤다.**
 
-> **✅ 브랜치 갱신**: 이전 스냅샷(2026-07-22)에서 별도 미머지 브랜치로 경고했던 `feature/sse_asset`(커밋 `3f10dc2`, "전역 SSE 알림 파이프라인 추가")가 PR #33으로 `dev`에 머지되어 이번 스냅샷부터 `com.likelion.a1.sse` 패키지와 `GenerationCompletedEvent`가 본문에 포함된다. 상세는 §1 패키지 트리 및 신설 §5 "SSE 알림 파이프라인"을 참고할 것 — **§5에 새로 발견된 인증 우회 이슈가 있다(SSE 구독 엔드포인트가 permitAll + userId 파라미터 신뢰).**
+> **✅ 이전 스냅샷(2026-07-23 오전, HEAD `5087a28`) 대비 변경점 요약**: (1) §2 이슈 1의 죽은 중복 리포지토리 삭제, (2) §2 이슈 3의 `GenerationController` 인증 우회 수정(`@AuthenticationPrincipal` + 소유권 검증), (3) 이전 스냅샷엔 이슈로 기록되지 않았지만 실제로는 완전히 미배선 상태였던 `GenerationResultService`(채팅 메시지/에셋 저장, `Chat.isGenerating` 토글)를 실제 파이프라인에 연결, (4) `GenerationJob`에 `@Version` 낙관적 락 도입 + 동시 완료 처리 중복 방지, (5) 생성 요청 4종 DTO에 `parentMessageId` 추가, (6) `ChatMessage`에 `generationJobId`/`generatedAssetId` 연관 매핑. 상세는 신설 §6 "GenerationResultService 배선 · parentMessageId · 동시성 방어(낙관적 락)"을 참고. 이 다섯 가지 전부 실제 코드 diff와(동시성 방어는) 로컬 Postgres 실측까지 근거로 확인했다.
 
 ---
 
@@ -19,12 +19,12 @@ com
       chat
         application
           service
-            ChatMessageService.java
+            ChatMessageService.java   (신규 메서드 `attachGenerationResult` — §6 참고)
             ChatService.java
         domain
           model
             Chat.java
-            ChatMessage.java
+            ChatMessage.java   (신규 메서드 `associateGenerationResult` — §6 참고)
             ChatMessageFile.java
           repository
             ChatMessageFileRepository.java
@@ -55,24 +55,25 @@ com
               ImageAnalysisPort.java
               PromptGenerationPort.java
           service
-            GeneratedMediaUploader.java
-            GenerationAiService.java
-            GenerationResultService.java
-            GenerationVideoPollingScheduler.java
+            GeneratedMediaUploader.java   (완료 처리 시 §6의 동시성 중복 스킵 가드 + `GenerationResultService` 호출 포함)
+            GenerationAiService.java   (4개 생성 메서드가 이제 `parentMessageId`를 받아 `GenerationResultService`와 연동 — §6 참고)
+            GenerationJobPoller.java   (신규 — job 하나를 REQUIRES_NEW 독립 트랜잭션으로 폴링/완료 처리, §6 참고)
+            GenerationResultService.java   ✅ 이전 스냅샷까지 완전히 미배선 상태였던 죽은 코드였으나 이번에 실제로 연결됨(§6 참고) — 더 이상 죽은 코드 아님
+            GenerationVideoPollingScheduler.java   (`GenerationJobPoller`에 job별 처리를 위임하는 얇은 스케줄러로 축소 — §6 참고)
             PerformanceMetrics.java
             SheetPromptComposer.java
         domain
           event
-            GenerationCompletedEvent.java   (신규 — `sse` 패키지가 구독하는 도메인 이벤트)
+            GenerationCompletedEvent.java   (`sse` 패키지가 구독하는 도메인 이벤트)
           model
             AiModel.java
-            GenerationJob.java
+            GenerationJob.java   (신규 `@Version` 필드로 낙관적 락 적용 — §6, 마이그레이션 V9 참고)
             GenerationQueue.java
             GenerationStatus.java   (enum)
             GenerationType.java     (enum)
             SheetType.java          (enum)
           repository
-            GenerationJobRepository.java   ⚠ 아래 "알려진 이슈" 참고 (동일 클래스명 중복, 죽은 코드)
+            GenerationJobRepository.java
         infrastructure
           client
             claude
@@ -85,14 +86,13 @@ com
               GptVisionImageAnalysisAdapter.java     (@Profile("prod"))
               MockImageAnalysisAdapter.java          (@Profile({"local","default"}))
           persistence
-            GenerationJobRepository.java   ⚠ 아래 "알려진 이슈" 참고 (동일 클래스명 중복, 죽은 코드)
-            GenerationJobRepositoryAdapter.java   (신규: `save()`가 상태를 COMPLETED/FAILED로 저장할 때 `GenerationCompletedEvent`를 발행 — 아래 "알려진 이슈" 참고)
+            GenerationJobRepositoryAdapter.java   ✅ §2 이슈 1의 죽은 중복 `GenerationJobRepository.java`(bare `JpaRepository`)는 삭제됨(더 이상 이 디렉터리에 없음). `save()`는 COMPLETED/FAILED 저장 시 `GenerationCompletedEvent`를 발행하고(아래 "알려진 이슈" 11번 참고), 이제 `saveAndFlush`를 써서 `@Version` 충돌을 그 자리에서 즉시 감지한다(§6 참고)
             SpringDataGenerationJobRepository.java
         presentation
           controller
-            GenerationController.java
+            GenerationController.java   (신규: `@AuthenticationPrincipal JwtPrincipal` 주입 + `userId` 소유권 검증 — §2 이슈 3 해결. 낙관적 락 충돌 재시도 래퍼도 여기 있음 — §6 참고)
           dto
-            GenerationJobDtos.java
+            GenerationJobDtos.java   (신규: 생성 요청 4종에 `parentMessageId` 필드 추가 — §6 참고)
             GenerationResultDtos.java
       global
         config
@@ -104,7 +104,7 @@ com
           BusinessException.java
           ErrorCode.java
           ErrorResponse.java
-          GlobalExceptionHandler.java
+          GlobalExceptionHandler.java   (신규: `OptimisticLockingFailureException` → 409(`INVALID_GENERATION_STATE`) 핸들러 추가 — §6 참고)
         response
           ApiResponse.java
       library
@@ -260,7 +260,9 @@ com
 
 > **참고 (사실 확인용, 이전 스냅샷 대비 변경점)**: 이전 스냅샷(브랜치 `feature/api` 기준)에서 "package-info.java만 있는 스캐폴딩"이라 기록했던 `library`/`media`/`project` 세 도메인은 **현재 모두 완전히 구현되어 있다** (`MyLibraryService` 989줄, `ProjectService`/`ProjectController`/`Project` 엔티티, `FileUploadService`/`FileDownloadService`/`S3MediaStorageAdapter` 전부 실동작). 다만 그 구현이 들어선 패키지 옆에 예전 스캐폴딩용 빈 `package-info.java`가 다수 남아 있다(하위 "알려진 이슈" 참고).
 >
-> **참고 (2026-07-22 → 2026-07-23 변경점)**: `feature/sse_asset`(PR #33)이 `dev`에 머지되어 `sse` 패키지 전체와 `generation/domain/event/GenerationCompletedEvent.java`가 신규 반영됐다. 이 패키지가 대체하는 것은 프론트가 기존에 쓰던 "생성 상태 3초 폴링" 방식이며, `notification` 테이블/도메인과는 무관한 별개의 ad-hoc 인메모리 push 파이프라인이다(§2 이슈 6 참고).
+> **참고 (2026-07-22 → 2026-07-23 오전 변경점)**: `feature/sse_asset`(PR #33)이 `dev`에 머지되어 `sse` 패키지 전체와 `generation/domain/event/GenerationCompletedEvent.java`가 신규 반영됐다. 이 패키지가 대체하는 것은 프론트가 기존에 쓰던 "생성 상태 3초 폴링" 방식이며, `notification` 테이블/도메인과는 무관한 별개의 ad-hoc 인메모리 push 파이프라인이다(§2 이슈 6 참고).
+>
+> **참고 (2026-07-23 오전 → 오후 변경점, `chore/checkout` 브랜치)**: `dev`(HEAD `5087a28`) 이후 `dev`에서 분기한 로컬 브랜치에서 다음이 진행됐다 — §2 이슈 1(죽은 중복 리포지토리) 삭제, 이슈 3(`GenerationController` 인증 우회) 수정, 완전히 미배선 상태였던 `GenerationResultService` 실배선, `GenerationJob.@Version` 낙관적 락 도입과 그 과정에서 실측으로 발견한 `UnexpectedRollbackException` 버그 수정, `parentMessageId`/`ChatMessage` 연관 매핑 추가. 상세는 신설 §6.
 
 ---
 
@@ -268,11 +270,9 @@ com
 
 이 섹션은 기획/설계 판단에 영향을 줄 수 있는 구조적 이슈만 모았다. 전부 grep/코드 읽기로 직접 확인함.
 
-1. **`generation` 도메인의 리포지토리 인터페이스 이름 중복 — 죽은 코드.**
-   `generation/domain/repository/GenerationJobRepository.java`(헥사고날 포트)와
-   `generation/infrastructure/persistence/GenerationJobRepository.java`(별개로 정의된, `JpaRepository<GenerationJob, Long>`을 직접 상속하는 두 번째 `public interface`)가 동일한 단순 클래스명으로 서로 다른 패키지에 존재한다.
-   실제 배선은 `GenerationAiService`/`GenerationVideoPollingScheduler` → `domain.repository.GenerationJobRepository`(포트) → `GenerationJobRepositoryAdapter` → `SpringDataGenerationJobRepository`(package-private)이다.
-   `infrastructure.persistence.GenerationJobRepository`(bare)는 어디에서도 주입되지 않는다 — 코드 전체에서 자기 선언 외 사용처가 0건. 다만 component-scan 대상 패키지의 public `JpaRepository` 서브인터페이스라 Spring Data가 런타임에 이 테이블(`generation_jobs`) 위에 두 번째로 중복된 리포지토리 빈을 실제로 만들어낸다. 순수 잔재이므로 삭제 권장.
+1. ✅ **해결됨 (`chore/checkout` 브랜치) — `generation` 도메인의 리포지토리 인터페이스 이름 중복(죽은 코드).**
+   ~~`generation/domain/repository/GenerationJobRepository.java`(헥사고날 포트)와 `generation/infrastructure/persistence/GenerationJobRepository.java`(별개로 정의된, `JpaRepository<GenerationJob, Long>`을 직접 상속하는 두 번째 `public interface`)가 동일한 단순 클래스명으로 서로 다른 패키지에 존재했다.~~
+   `infrastructure.persistence.GenerationJobRepository`(bare, 어디에서도 주입되지 않던 순수 잔재)를 삭제했다. 실제 배선은 여전히 `GenerationAiService`/`GenerationJobPoller` → `domain.repository.GenerationJobRepository`(포트) → `GenerationJobRepositoryAdapter` → `SpringDataGenerationJobRepository`(package-private) 그대로다. 삭제로 인한 부작용 없음(빌드/컨텍스트 로드 테스트로 확인).
 
 2. **`user` 도메인도 같은 이름 중복 패턴이지만, 이쪽은 실제로 살아있는 코드다.**
    `domain/repository/UserRepository.java`(포트) vs `infrastructure/persistence/UserRepository.java`(bare `JpaRepository<User, Long>`)가 역시 중복 존재한다.
@@ -280,8 +280,11 @@ com
    `UserCommandService.register()` → `User.local(email, passwordHash, name)` 팩토리는 `loginId = email`로 채우고 `birthDate`/`phoneNumber`를 null로 남기는데, 이 두 컬럼은 마이그레이션 V2에서 `NOT NULL` 제약이 걸려 있어 데이터 정합성 리스크가 있다.
    또한 `/api/v1/users`는 `SecurityConfig`의 permitAll 목록에 없어 유효한 JWT가 있어야 호출 가능 — "회원가입"처럼 보이지만 인증된 사용자만 부를 수 있는, 사실상 도달 불가능한 엔드포인트다. 팀 확인 전에는 레거시/사문화 코드로 간주 권장.
 
-3. **`generation/presentation/controller/GenerationController.java`의 인증 우회 가능성.**
-   `/api/v1/generation/**`는 `SecurityConfig`상 permitAll이 아니라 유효한 JWT를 요구하지만, 컨트롤러 내부 어디에서도 `@AuthenticationPrincipal`을 쓰지 않는다. `userId`/`chatId`를 요청 바디에서 그대로 받아 서비스로 넘기고, 이 값이 실제 토큰 주체와 일치하는지 검증하지 않는다. 즉 유효한 토큰만 있으면 임의의 `userId`/`chatId`로 다른 사용자의 생성 작업을 만들 수 있다.
+3. ✅ **해결됨 (`chore/checkout` 브랜치) — `generation/presentation/controller/GenerationController.java`의 인증 우회 가능성.**
+   ~~컨트롤러 내부 어디에서도 `@AuthenticationPrincipal`을 쓰지 않아 `userId`/`chatId`를 요청 바디 값 그대로 신뢰했다.~~
+   이제 요청 바디를 받는 4개 엔드포인트(`regeneratePrompt`/`reversePrompt`/`submitFalJob`/`generateVideo`) 전부 `@AuthenticationPrincipal JwtPrincipal principal`을 주입받고, `verifyOwnership(principal, request.userId())`로 `principal.userId()`와 요청 바디의 `userId`가 다르면 `BusinessException(INVALID_INPUT)`을 던진다. `principal`이 null이어도 같은 분기에서 안전하게 걸러진다(NPE 없음).
+   **다만 `chatId`가 그 `userId` 소유인지는 컨트롤러가 아니라, 이번에 새로 배선된 `GenerationResultService.startGenerating()`(내부적으로 `ChatService.findOwnedChat`을 호출)이 처리 시작 시점에 검증한다 — 결과적으로 막히지만, 검증 시점이 컨트롤러가 아니라 서비스 초입이라는 점은 알아둘 것(§6 참고).**
+   `GET /fal-jobs/{jobId}/status`(경로 변수만 사용, 바디 없음)는 이번 수정 범위 밖이라 여전히 `jobId`만 알면 타인의 job 상태를 조회할 수 있다 — 잔존 이슈로 남겨둔다.
 
 4. **`global/config/WebConfig.java`는 사실상 죽은/중복 설정.**
    Spring Security의 `CorsConfigurationSource` 빈(`localhost:3000`/`localhost:5173`/`*.vercel.app`, `allowCredentials=false`)이 보안 필터가 적용되는 모든 요청에서 실제로 사용되는 CORS 설정이다. `WebConfig`는 별도의 더 좁은 CORS 매핑(`localhost:3000`만, `allowCredentials(true)`)을 등록하지만 보안 필터 대상 요청에는 무시된다. 유지보수 시 혼란을 줄 수 있는 leftover.
@@ -303,8 +306,11 @@ com
     즉 토큰 없이 `userId`만 순차 대입하면 임의의 사용자가 받을 "AI 생성 완료/실패" 알림(job 결과 URL 포함)을 실시간으로 가로챌 수 있다. `SseRepository`는 `userId`당 하나의 `SseEmitter`만 유지하므로(같은 `userId`로 새로 구독하면 이전 연결을 덮어쓰는 것이 아니라 맵에 재등록만 함) 후속 구독자가 붙으면 원래 사용자의 알림을 가로채는 것도 가능하다. 이슈 3(`GenerationController`의 `userId` 미검증)과 같은 패턴이 인증 자체가 없는 상태로 한 단계 더 악화된 형태.
     또한 `SseRepository`가 단일 JVM 인메모리 `ConcurrentHashMap`이라 인스턴스가 2대 이상으로 스케일 아웃되면 이벤트를 발행한 인스턴스와 사용자가 실제로 붙어 있는 인스턴스가 다를 경우 알림이 유실된다 — 로드밸런서 뒤 다중 인스턴스 배포 전 반드시 짚어야 할 구조적 한계.
 
-11. **(신규) `GenerationCompletedEvent` 발행 위치가 계층을 건너뛴다.**
-    이벤트 발행이 애플리케이션 서비스가 아니라 `generation/infrastructure/persistence/GenerationJobRepositoryAdapter.save()` 안에서 "상태가 COMPLETED/FAILED면 발행"이라는 조건으로 이뤄진다. 즉 인프라(영속성) 계층이 비즈니스 상태 판단과 도메인 이벤트 발행 책임을 함께 지고 있어 헥사고날 아키텍처의 계층 경계를 벗어난다. 동작 자체는 정상이지만(`GenerationAiService`/`GenerationVideoPollingScheduler`가 상태 전이 시 호출하는 `save()`마다 걸림), 향후 이 어댑터를 교체하거나 다른 경로로 상태를 저장하는 코드가 추가되면 이벤트 발행이 조용히 누락될 위험이 있다.
+11. **`GenerationCompletedEvent` 발행 위치가 계층을 건너뛴다.**
+    이벤트 발행이 애플리케이션 서비스가 아니라 `generation/infrastructure/persistence/GenerationJobRepositoryAdapter.save()` 안에서 "상태가 COMPLETED/FAILED면 발행"이라는 조건으로 이뤄진다. 즉 인프라(영속성) 계층이 비즈니스 상태 판단과 도메인 이벤트 발행 책임을 함께 지고 있어 헥사고날 아키텍처의 계층 경계를 벗어난다. 동작 자체는 정상이지만(`GenerationAiService`/`GenerationJobPoller`가 상태 전이 시 호출하는 `save()`마다 걸림 — §6 참고), 향후 이 어댑터를 교체하거나 다른 경로로 상태를 저장하는 코드가 추가되면 이벤트 발행이 조용히 누락될 위험이 있다. (참고: 이 `save()`는 §6에서 `saveAndFlush`로 바뀌었지만 이벤트 발행 위치/조건 자체는 그대로다.)
+
+12. **(신규) 생성 요청 DTO의 `parentMessageId`는 존재/소유권 검증이 없다.**
+    `PromptRequest`/`ReversePromptRequest`/`FalJobRequest`/`VideoGenerationRequest`(§6 참고)에 새로 추가된 `parentMessageId`는 애플리케이션 코드 어디서도 "그 메시지가 실제로 존재하는지", "그 메시지가 이 요청의 `chatId`와 같은 채팅방 소속인지"를 검증하지 않는다. `generation_jobs.request_message_id`가 `chat_messages(id)`를 가리키는 FK(`ON DELETE SET NULL`, V1)라서 **존재하지 않는 id는 INSERT 시 FK 위반으로 걸러지지만**(`GlobalExceptionHandler.handleDataIntegrityViolation` → 400), **다른 채팅방(심지어 다른 사용자)의 실존 메시지 id를 넣는 것은 FK 통과 후 그대로 저장된다.** 실질적으로는 `ChatMessage.parentMessageId`/응답 조회 시 다소 앞뒤가 안 맞는 데이터가 생기는 정도의 영향이라 심각도는 낮지만, 문서화 목적상 기록해둔다.
 
 ---
 
@@ -511,6 +517,13 @@ public class ChatMessage {
     this.updatedAt = OffsetDateTime.now();
   }
 
+  /** (신규 — §6 참고) AI 생성 파이프라인이 이 메시지를 만들어낸 GenerationJob/GeneratedAsset과 연결한다. */
+  public void associateGenerationResult(Long generationJobId, Long generatedAssetId) {
+    this.generationJobId = generationJobId;
+    this.generatedAssetId = generatedAssetId;
+    this.updatedAt = OffsetDateTime.now();
+  }
+
   public void delete() {
     this.status = "DELETED";
     this.updatedAt = OffsetDateTime.now();
@@ -609,7 +622,7 @@ public class ChatMessageFile {
 
 ### `generation/domain/model/GenerationJob.java`
 
-> **변경점**: 이전 스냅샷 대비 `jobType` 필드가 `generationType`으로 이름이 바뀌었고 `imageCategory` 필드가 추가되었다(마이그레이션 V4와 일치).
+> **변경점**: 이전 스냅샷 대비 `jobType` 필드가 `generationType`으로 이름이 바뀌었고 `imageCategory` 필드가 추가되었다(마이그레이션 V4와 일치). **이번 스냅샷에서 `@Version private Long version` 필드가 신규 추가됐다**(마이그레이션 V9, §6 참고) — 수동 폴링(`getStatus`)과 백그라운드 스케줄러가 같은 job을 동시에 완료 처리하려 할 때 낙관적 락으로 충돌을 감지한다.
 
 ```java
 package com.likelion.a1.generation.domain.model;
@@ -670,6 +683,10 @@ public class GenerationJob {
 
   @Column(nullable = false)
   private OffsetDateTime updatedAt;
+
+  @Version
+  @Column(nullable = false)
+  private Long version;
 
   public static GenerationJob create(
       Long userId,
@@ -2147,7 +2164,7 @@ public record GenerationCompletedEvent(
 }
 ```
 
-### `generation/infrastructure/persistence/GenerationJobRepositoryAdapter.java` (발행부만 — 나머지는 §2 이슈 1 참고)
+### `generation/infrastructure/persistence/GenerationJobRepositoryAdapter.java` (발행부만 — `save()`는 §6에서 `saveAndFlush`로 변경됨)
 
 ```java
 @Repository
@@ -2156,7 +2173,7 @@ class GenerationJobRepositoryAdapter implements GenerationJobRepository {
   private final ApplicationEventPublisher eventPublisher;
 
   public GenerationJob save(GenerationJob job) {
-    GenerationJob saved = repository.save(job);
+    GenerationJob saved = repository.saveAndFlush(job);
     if (isTerminal(saved.getStatus())) {
       eventPublisher.publishEvent(GenerationCompletedEvent.from(saved));
     }
@@ -2166,7 +2183,7 @@ class GenerationJobRepositoryAdapter implements GenerationJobRepository {
   private boolean isTerminal(String status) {
     return GenerationStatus.COMPLETED.name().equals(status) || GenerationStatus.FAILED.name().equals(status);
   }
-  // findById / findByStatusIn 생략 — §2 이슈 1과 동일
+  // findById / findByStatusIn 생략 — 이제 §2 이슈 1의 죽은 중복 클래스는 삭제되어 없음
 }
 ```
 
@@ -2352,11 +2369,166 @@ public final class SseDtos {
 
 ### 마이그레이션/설정 영향
 
-이 파이프라인은 새 Flyway 마이그레이션을 추가하지 않았다(§6 마이그레이션 목록은 여전히 V8까지). `application.yml`에도 SSE 전용 설정 키가 없다 — 타임아웃(`TIMEOUT_MS = 30분`)과 하트비트 주기(`30초`)가 모두 코드에 하드코딩되어 있다.
+이 파이프라인은 새 Flyway 마이그레이션을 추가하지 않았다(§7 마이그레이션 목록 참고 — SSE 이후 V9까지 추가된 건 §6의 `@Version` 관련 마이그레이션 하나뿐, SSE 자체는 여전히 마이그레이션 없음). `application.yml`에도 SSE 전용 설정 키가 없다 — 타임아웃(`TIMEOUT_MS = 30분`)과 하트비트 주기(`30초`)가 모두 코드에 하드코딩되어 있다.
 
 ---
 
-## 6. Configuration — `src/main/resources/application.yml`
+## 6. GenerationResultService 배선 · parentMessageId · 동시성 방어(낙관적 락) — 신규(`chore/checkout` 브랜치)
+
+`dev`(HEAD `5087a28`) 이후 진행된 작업. 세 가지가 서로 얽혀 있어 한 섹션으로 묶는다: (A) 완전히 미배선 상태였던 `GenerationResultService`를 실제로 연결, (B) 그 연결에 필요한 `parentMessageId`/`generationJobId`/`generatedAssetId` 배관, (C) 그 과정에서 드러난 "폴링 요청 두 개가 같은 job을 동시에 완료 처리하면 어떻게 되는가"라는 동시성 문제와 그 해결.
+
+### A. `GenerationResultService` — 이전엔 죽은 코드였다
+
+이전 스냅샷 시점까지 `GenerationResultService`(어시스턴트 텍스트/에셋 결과를 `ChatMessage`로 저장하고 `Chat.isGenerating`을 시작/종료하는 서비스)는 **코드베이스 어디에서도 호출되지 않는 완전한 죽은 코드였다** — `GenerationAiService`가 fal.ai/Claude/GPT Vision 결과를 `GenerationJob.responsePayload`에만 채우고, 그 결과를 채팅 히스토리에 반영하는 경로 자체가 없었다. 이번에 다음과 같이 연결했다.
+
+- `GenerationAiService.regeneratePrompt`/`reversePrompt`(동기, 텍스트 결과): AI 호출 성공 직후 `generationResultService.saveAssistantTextResult(...)`로 어시스턴트 텍스트 메시지를 즉시 저장. 실패 시엔 `finishGenerating`만 호출.
+- `GenerationAiService.submitFalJob`/`generateVideo`(비동기 제출): 제출 시점에 `startGenerating`만 호출(아직 결과 없음). 제출 자체가 실패하면 `finishGenerating`.
+- `GeneratedMediaUploader.applyCompletion`(비동기 완료 시점 — 수동 폴링/`GenerationJobPoller` 공통 경로): S3 업로드 성공 직후 `generationResultService.saveAssistantAssetResult(...)`로 ASSET 메시지 + `GeneratedAsset` 생성. 실패/FAILED 시엔 `finishGenerating`만.
+
+**`finishGenerating` 호출부는 전부 예외로부터 보호되어 있다** — 채팅방이 폴링 도중 삭제되는 등으로 `finishGenerating`이 실패해도(내부적으로 `ChatService.findOwnedChat`이 던지는 `BusinessException`), 로그만 남기고 원래 흐름(원본 AI 예외 전파, 또는 완료 처리 계속)을 가리지 않는다. `GenerationAiService.safeFinishGenerating`/`GeneratedMediaUploader.safeFinishGenerating` 두 곳에 동일 패턴으로 존재.
+
+### B. `parentMessageId` 배선 + `ChatMessage` 연관 매핑
+
+`PromptRequest`/`ReversePromptRequest`/`FalJobRequest`/`VideoGenerationRequest`(`GenerationJobDtos`) 4개 전부에 optional `Long parentMessageId` 필드가 추가됐다. `GenerationController` → `GenerationAiService`의 4개 메서드 새 파라미터로 전달 → `GenerationJob.create(...)`의 기존 `requestMessageId` 자리(이전엔 항상 `null`)에 실제로 흘러 들어간다.
+
+완료 시점에는 `ChatMessage`에 새 도메인 메서드 `associateGenerationResult(Long generationJobId, Long generatedAssetId)`(§3 `ChatMessage.java` 참고)가 추가됐고, `ChatMessageService`에 이를 호출하는 `attachGenerationResult(Long messageId, Long generationJobId, Long generatedAssetId)`가 추가됐다:
+
+```java
+// ChatMessageService.java (신규 메서드)
+public MessageResponse attachGenerationResult(
+    Long messageId, Long generationJobId, Long generatedAssetId) {
+  ChatMessage message =
+      messageRepository
+          .findById(messageId)
+          .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_INPUT));
+  message.associateGenerationResult(generationJobId, generatedAssetId);
+
+  ChatMessage savedMessage = messageRepository.save(message);
+  List<ChatMessageFile> files = fileRepository.findByMessageIds(List.of(savedMessage.getId()));
+
+  return toResponse(savedMessage, files);
+}
+```
+
+`GenerationResultService.saveAssistantTextResult`/`saveAssistantAssetResult`가 메시지(및 에셋) 생성 직후 이 메서드를 호출해 `ChatMessage.generationJobId`/`generatedAssetId`(엔티티엔 필드가 있었지만 지금까지 세터가 없어 항상 `null`이었음)를 채운다. **로컬 Postgres에 실제로 검증**: 유저 메시지(id=11) → `parentMessageId=11`로 fal job 제출 → 완료 후 조회 결과 `chat_messages` 행이 `parent_message_id=11 | generation_job_id=9 | generated_asset_id=11`로 정확히 연결됨을 확인했다.
+
+> ⚠️ `parentMessageId`는 존재/소유권 검증이 없다 — §2 이슈 12 참고.
+
+### C. 동시성 방어(낙관적 락) — 실제 버그를 찾아서 고침
+
+**문제**: 수동 폴링(`GET /fal-jobs/{jobId}/status`)과 5초 주기 백그라운드 스케줄러가 같은 `GenerationJob`을 동시에 완료 처리하면, 채팅 메시지/에셋이 중복 생성되거나 job 상태가 조용히 덮어써질 수 있었다(이전 스냅샷 이슈 11 근처에서 이미 지적됐던 구조적 위험).
+
+**1차 조치**: `GenerationJob`에 `@Version private Long version`(마이그레이션 V9, §3/§7 참고) 추가, `GenerationJobRepositoryAdapter.save()`를 `saveAndFlush`로 바꿔 버전 충돌을 그 자리에서 즉시 감지, `GeneratedMediaUploader.applyCompletion()`에 `isAlreadyFinalized(jobId)` 가드 추가(DB에서 이미 종결 상태로 확인되면 S3 재업로드·메시지 중복 생성을 스킵).
+
+**여기서 실제 버그 발견**: `GenerationAiService.getStatus()`가 `saveAndFlush`의 `OptimisticLockingFailureException`을 같은 `@Transactional` 메서드 안에서 잡아 "복구"를 시도했는데, **로컬 Postgres에 실제로 붙여 8-way 동시 요청으로 재현**하자 로그에 정상적으로 catch 로그가 찍힌 직후 곧바로 `org.springframework.transaction.UnexpectedRollbackException: Transaction silently rolled back because it has been marked as rollback-only`가 터졌다(HTTP 응답 하나가 빈 바디로 크래시). 원인: Hibernate/Spring이 낙관적 락 충돌이 발생한 순간 그 트랜잭션을 이미 rollback-only로 표시해버려서, 같은 트랜잭션 안에서 예외를 잡고 정상 반환해도 메서드 종료 후 커밋 시점에 다시 터진다.
+
+**최종 수정**:
+- `GenerationAiService.getStatus()`는 충돌을 더 이상 잡지 않고 그대로 던진다(트랜잭션이 깨끗하게 롤백됨).
+- 복구(재조회)는 트랜잭션 경계 밖인 `GenerationController`로 옮겨서, 실패 시 서비스 메서드를 한 번 더(완전히 새 트랜잭션으로) 호출한다:
+
+```java
+// GenerationController.java (신규)
+private GenerationJob getStatusWithConflictRetry(Long jobId) {
+  try {
+    return generationAiService.getStatus(jobId);
+  } catch (OptimisticLockingFailureException exception) {
+    log.info("Job {} 동시 완료 처리 충돌 감지 — 새 트랜잭션으로 한 번 더 조회합니다.", jobId);
+    return generationAiService.getStatus(jobId);
+  }
+}
+```
+
+- 스케줄러 쪽은 문제가 더 컸다 — `GenerationVideoPollingScheduler.pollPendingJobs()`가 여러 job을 **하나의 `@Transactional` 안에서 순회**했기 때문에, job A에서 낙관적 락 충돌이 나면 그 트랜잭션 전체가 rollback-only로 표시되어 **같은 사이클에서 이미 정상 처리된 job B/C까지 커밋 시점에 함께 롤백**될 위험이 있었다. 이를 job마다 독립 트랜잭션으로 분리하는 신규 컴포넌트 `GenerationJobPoller`를 추가하고, 스케줄러는 이를 호출하는 얇은 루프로 축소했다:
+
+```java
+// GenerationJobPoller.java (신규 파일, 전체)
+package com.likelion.a1.generation.application.service;
+
+import com.likelion.a1.generation.application.port.out.FalGenerationPort;
+import com.likelion.a1.generation.application.port.out.FalGenerationStatus;
+import com.likelion.a1.generation.domain.model.GenerationJob;
+import com.likelion.a1.generation.domain.model.GenerationStatus;
+import com.likelion.a1.generation.domain.repository.GenerationJobRepository;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientException;
+
+/**
+ * 개별 GenerationJob 하나를 자기 자신만의 독립 트랜잭션(REQUIRES_NEW)으로 폴링/완료 처리한다.
+ * GenerationVideoPollingScheduler가 한 사이클에 여러 job을 순회할 때, 이 트랜잭션을 job마다
+ * 분리해 두지 않으면 job A에서 @Version 낙관적 락 충돌이 나는 순간 그 트랜잭션 전체가 rollback-only로
+ * 표시되어(Hibernate 특성) 같은 사이클에서 이미 정상 처리된 job B/C의 커밋까지 함께 날아간다.
+ */
+@Component
+class GenerationJobPoller {
+  private final GenerationJobRepository generationJobRepository;
+  private final FalGenerationPort falGenerationPort;
+  private final GeneratedMediaUploader generatedMediaUploader;
+
+  GenerationJobPoller(
+      GenerationJobRepository generationJobRepository,
+      FalGenerationPort falGenerationPort,
+      GeneratedMediaUploader generatedMediaUploader) {
+    this.generationJobRepository = generationJobRepository;
+    this.falGenerationPort = falGenerationPort;
+    this.generatedMediaUploader = generatedMediaUploader;
+  }
+
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  void pollJob(Long jobId) {
+    GenerationJob job = generationJobRepository.findById(jobId).orElse(null);
+    if (job == null) {
+      return;
+    }
+
+    Map<String, Object> requestPayload = job.getRequestPayload();
+    Map<String, Object> responsePayload = job.getResponsePayload();
+    if (requestPayload == null || responsePayload == null) {
+      return;
+    }
+
+    Object modelCodeValue = requestPayload.get("modelCode");
+    Object externalRequestIdValue = responsePayload.get("requestId");
+    if (!(modelCodeValue instanceof String modelCode) || !(externalRequestIdValue instanceof String externalRequestId)) {
+      return;
+    }
+
+    FalGenerationStatus polled;
+    try {
+      polled = falGenerationPort.poll(modelCode, externalRequestId);
+    } catch (RestClientException exception) {
+      return;
+    }
+
+    GenerationStatus newStatus = GenerationStatus.fromFalStatus(polled.status());
+    Map<String, Object> merged = new LinkedHashMap<>(responsePayload);
+    merged.putAll(polled.rawResponse());
+
+    newStatus = generatedMediaUploader.applyCompletion(job, newStatus, merged);
+
+    job.applyPolledStatus(newStatus, merged);
+    // @Version 충돌이 나면 이 메서드 밖(REQUIRES_NEW 트랜잭션 경계)으로 그대로 던진다 — 이 job의
+    // 독립 트랜잭션만 깨끗하게 롤백되고, 호출자(GenerationVideoPollingScheduler)가 job 단위로 감싼
+    // try/catch에서 로그만 남기고 다음 job으로 넘어간다.
+    generationJobRepository.save(job);
+  }
+}
+```
+
+`GenerationVideoPollingScheduler`는 이제 `@Transactional`이 아니다 — `pollPendingJobs()`가 non-transactional 루프에서 `generationJobPoller.pollJob(job.getId())`를 job마다 try/catch로 감싸 호출한다(이 catch는 이제 트랜잭션 경계 밖이라 다른 job에 영향을 주지 않는다).
+
+**최후 안전망**: `GlobalExceptionHandler`에 `OptimisticLockingFailureException` → 409(`ErrorCode.INVALID_GENERATION_STATE`) 핸들러를 추가해, 컨트롤러의 재시도 한 번이 만에 하나 또 충돌해도(극히 드묾) 서버가 raw 500 대신 깔끔한 에러 응답을 준다.
+
+**재검증(로컬 Postgres, fal 목업이 "2번째 poll부터 COMPLETED" 반환하는 특성 이용)**: 같은 job에 진짜 동시 요청 8개를 꽂았을 때 — 수정 전엔 `UnexpectedRollbackException`으로 응답 하나가 빈 바디(500)였고, 수정 후엔 8개 전부 HTTP 200(`PROCESSING` 1개 + `COMPLETED` 7개)이었다. DB 확인 결과 `generated_assets`/`chat_messages`(ASSET) 모두 그 job에 대해 정확히 1건 — 8-way 동시 완료 시도에도 중복 없음.
+
+**알아둘 잔여 리스크(경미)**: "패배한" 트랜잭션이 S3 업로드까지는 끝내놓고 최종 `save()`에서 롤백되는 경우, 그 S3 오브젝트는 DB에서 참조되지 않는 고아 파일로 남는다(데이터 정합성 문제는 아니고, 약간의 스토리지 낭비만 발생).
+
+---
+
+## 7. Configuration — `src/main/resources/application.yml`
 
 > 저장소에는 여전히 `application.yml` 하나만 존재한다(`application-local.yml`/`application-prod.yml` 없음). 프로필 분기는 `@Profile("local")` / `@Profile("!local")` 또는 `@Profile("prod")` 어노테이션으로 Java 코드 레벨에서 처리되고, 기본 활성 프로필은 `spring.profiles.default: local`이다. 이전 스냅샷 대비 `spring.config.import`(`.env` 자동 로드), `spring.mail.*`, `app.cors.*`, `app.jwt.*`, `app.storage.access-key/secret-key`가 신규 추가되었다.
 >
@@ -2449,8 +2621,9 @@ app:
 | `V6__add_my_library_project_deep_copy_schema.sql` | `library_projects` 테이블 신설(자기참조 트리, `parent_project_id`/`depth`); `storage_folders`에 `library_project_id`/`folder_type`/`asset_type` 추가; `saved_assets` 재구성(`generated_asset_id→source_generated_asset_id` 개명 및 nullable화, `library_project_id`/`asset_type` 추가); `saved_asset_files` 테이블 신설. 현재의 `LibraryProject`/`StorageFolder`/`SavedAsset`/`SavedAssetFile` 엔티티가 이 마이그레이션 위에 서 있음. |
 | `V7__extend_saved_assets_source_metadata.sql` | `saved_assets`에 `source_type`/`source_chat_id`/`source_message_id`/`source_message_file_id` 추가(+`generated_assets`로부터 백필). |
 | `V8__link_library_projects_to_projects.sql` | `library_projects.source_project_id`가 `projects`를 참조하는 FK 추가(+백필: 활성 프로젝트마다 "보관함" 라이브러리 프로젝트 자동 생성). `LibraryProject.sourceProjectId`/`MyLibraryService.createLinkedLibraryProject`와 대응. |
+| `V9__add_version_to_generation_jobs.sql` | `generation_jobs.version BIGINT NOT NULL DEFAULT 0` 추가 — `GenerationJob.@Version`(§6 참고)이 필요로 하는 낙관적 락 컬럼. **주의**: 테스트 프로필(H2, `ddl-auto: create-drop`, `flyway.enabled: false`)은 이 마이그레이션을 거치지 않고 엔티티 어노테이션에서 스키마를 직접 생성하므로, `./gradlew clean build`만으로는 이 마이그레이션 자체의 실행 여부가 검증되지 않는다 — 로컬 Postgres(`ddl-auto: validate`)에 실제로 붙여서 Flyway 적용과 `contextLoads`(스키마 검증)까지 확인함(§6 참고). |
 
-**정합성 확인**: 위 §3의 모든 엔티티 필드는 V8까지 적용된 스키마와 정확히 일치한다(예: `GenerationJob.generationType`/`imageCategory` ↔ V4, `SavedAsset.sourceType/sourceChatId/sourceMessageId/sourceMessageFileId` ↔ V7, `LibraryProject.sourceProjectId` ↔ V8). 엔티티와 마이그레이션 사이에 미해결 드리프트는 없다 — 유일한 "충돌"은 **이전 스냅샷(구 `feature/api` 기준)의 서술**과의 차이였을 뿐이다.
+**정합성 확인**: 위 §3의 모든 엔티티 필드는 V9까지 적용된 스키마와 정확히 일치한다(예: `GenerationJob.generationType`/`imageCategory` ↔ V4, `GenerationJob.version` ↔ V9, `SavedAsset.sourceType/sourceChatId/sourceMessageId/sourceMessageFileId` ↔ V7, `LibraryProject.sourceProjectId` ↔ V8). 엔티티와 마이그레이션 사이에 미해결 드리프트는 없다.
 
 ### AI/스토리지 어댑터 요약
 
@@ -2463,7 +2636,7 @@ app:
 
 ---
 
-## 7. 관련 실무 문서 포인터 (Gemini가 추가 맥락이 필요할 때 참고)
+## 8. 관련 실무 문서 포인터 (Gemini가 추가 맥락이 필요할 때 참고)
 
 - API 계약(생성 파이프라인 상세): `docs_h/API_명세서.md`
 - API 계약(빠른 참조): `docs_h/API_명세서_간략.md`
