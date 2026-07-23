@@ -9,6 +9,9 @@ import com.likelion.a1.generation.domain.repository.GenerationJobRepository;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +25,7 @@ import org.springframework.web.client.RestClientException;
  */
 @Component
 public class GenerationVideoPollingScheduler {
+  private static final Logger log = LoggerFactory.getLogger(GenerationVideoPollingScheduler.class);
   private static final List<String> POLLABLE_STATUSES =
       List.of(GenerationStatus.QUEUED.name(), GenerationStatus.PROCESSING.name());
   private static final List<String> POLLABLE_TYPES =
@@ -77,6 +81,13 @@ public class GenerationVideoPollingScheduler {
     newStatus = generatedMediaUploader.applyCompletion(job, newStatus, merged);
 
     job.applyPolledStatus(newStatus, merged);
-    generationJobRepository.save(job);
+    try {
+      generationJobRepository.save(job);
+    } catch (OptimisticLockingFailureException exception) {
+      // 수동 polling(getStatus)이 같은 job을 먼저 커밋한 경우. 이 job만 스킵하고 배치의 나머지 job은
+      // 계속 처리한다 — 여기서 예외를 밖으로 새게 두면 pollPendingJobs() 트랜잭션 전체가 롤백되어
+      // 이미 정상 처리된 다른 job들까지 되돌아간다.
+      log.info("Job {} 동시 완료 처리 충돌 감지 — 다른 폴러가 이미 저장함, 스킵합니다.", job.getId());
+    }
   }
 }
