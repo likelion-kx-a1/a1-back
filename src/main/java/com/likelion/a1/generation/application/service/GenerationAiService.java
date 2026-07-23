@@ -17,6 +17,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientResponseException;
@@ -25,6 +27,7 @@ import org.springframework.web.client.RestClientResponseException;
 @Service
 @Transactional
 public class GenerationAiService {
+  private static final Logger log = LoggerFactory.getLogger(GenerationAiService.class);
   private static final int MAX_REFERENCE_IMAGES = 9;
 
   private final GenerationJobRepository generationJobRepository;
@@ -32,22 +35,30 @@ public class GenerationAiService {
   private final ImageAnalysisPort imageAnalysisPort;
   private final FalGenerationPort falGenerationPort;
   private final GeneratedMediaUploader generatedMediaUploader;
+  private final GenerationResultService generationResultService;
 
   public GenerationAiService(
       GenerationJobRepository generationJobRepository,
       PromptGenerationPort promptGenerationPort,
       ImageAnalysisPort imageAnalysisPort,
       FalGenerationPort falGenerationPort,
-      GeneratedMediaUploader generatedMediaUploader) {
+      GeneratedMediaUploader generatedMediaUploader,
+      GenerationResultService generationResultService) {
     this.generationJobRepository = generationJobRepository;
     this.promptGenerationPort = promptGenerationPort;
     this.imageAnalysisPort = imageAnalysisPort;
     this.falGenerationPort = falGenerationPort;
     this.generatedMediaUploader = generatedMediaUploader;
+    this.generationResultService = generationResultService;
   }
 
   public GenerationJob regeneratePrompt(
-      Long userId, Long chatId, String imageBase64, String mimeType, String instruction) {
+      Long userId,
+      Long chatId,
+      String imageBase64,
+      String mimeType,
+      String instruction,
+      Long parentMessageId) {
     byte[] imageBytes = imageBase64 == null || imageBase64.isBlank() ? null : decodeImage(imageBase64);
 
     Map<String, Object> requestPayload = new LinkedHashMap<>();
@@ -59,10 +70,11 @@ public class GenerationAiService {
                 userId,
                 chatId,
                 null,
-                null,
+                parentMessageId,
                 GenerationType.PROMPT_REGENERATION.name(),
                 instruction,
                 requestPayload));
+    generationResultService.startGenerating(userId, chatId);
 
     try {
       long startedAtMs = System.currentTimeMillis();
@@ -73,9 +85,12 @@ public class GenerationAiService {
       PerformanceMetrics.record(responsePayload, "refineDurationMs", refineDurationMs);
       PerformanceMetrics.announce(job.getId(), responsePayload);
       job.complete(responsePayload);
+      generationResultService.saveAssistantTextResult(
+          userId, chatId, job.getRequestMessageId(), job.getId(), result.text(), null, null);
     } catch (RestClientResponseException exception) {
       job.fail(exception.getMessage());
       generationJobRepository.save(job);
+      safeFinishGenerating(userId, chatId);
       throw exception;
     }
 
@@ -83,7 +98,12 @@ public class GenerationAiService {
   }
 
   public GenerationJob reversePrompt(
-      Long userId, Long chatId, String imageBase64, String mimeType, String instruction) {
+      Long userId,
+      Long chatId,
+      String imageBase64,
+      String mimeType,
+      String instruction,
+      Long parentMessageId) {
     byte[] imageBytes = decodeImage(imageBase64);
 
     Map<String, Object> requestPayload = new LinkedHashMap<>();
@@ -92,7 +112,14 @@ public class GenerationAiService {
     GenerationJob job =
         generationJobRepository.save(
             GenerationJob.create(
-                userId, chatId, null, null, GenerationType.REVERSE_PROMPT.name(), instruction, requestPayload));
+                userId,
+                chatId,
+                null,
+                parentMessageId,
+                GenerationType.REVERSE_PROMPT.name(),
+                instruction,
+                requestPayload));
+    generationResultService.startGenerating(userId, chatId);
 
     try {
       long startedAtMs = System.currentTimeMillis();
@@ -103,9 +130,12 @@ public class GenerationAiService {
       PerformanceMetrics.record(responsePayload, "analysisDurationMs", analysisDurationMs);
       PerformanceMetrics.announce(job.getId(), responsePayload);
       job.complete(responsePayload);
+      generationResultService.saveAssistantTextResult(
+          userId, chatId, job.getRequestMessageId(), job.getId(), result.text(), null, null);
     } catch (RestClientResponseException exception) {
       job.fail(exception.getMessage());
       generationJobRepository.save(job);
+      safeFinishGenerating(userId, chatId);
       throw exception;
     }
 
@@ -119,7 +149,8 @@ public class GenerationAiService {
       String modelCode,
       Map<String, Object> input,
       String sheetType,
-      String sheetValue) {
+      String sheetValue,
+      Long parentMessageId) {
     GenerationType type = parseGenerationType(jobType);
     String originalPrompt = input.get("prompt") instanceof String promptText ? promptText : null;
 
@@ -144,7 +175,9 @@ public class GenerationAiService {
 
     GenerationJob job =
         generationJobRepository.save(
-            GenerationJob.create(userId, chatId, null, null, type.name(), finalPrompt, requestPayload));
+            GenerationJob.create(
+                userId, chatId, null, parentMessageId, type.name(), finalPrompt, requestPayload));
+    generationResultService.startGenerating(userId, chatId);
 
     try {
       long startedAtMs = System.currentTimeMillis();
@@ -162,9 +195,12 @@ public class GenerationAiService {
     } catch (RestClientResponseException exception) {
       job.fail(exception.getMessage());
       generationJobRepository.save(job);
+      safeFinishGenerating(userId, chatId);
       throw exception;
     }
 
+    // 실제 완료 처리(채팅 메시지/에셋 저장, isGenerating 해제)는 비동기 완료 시점
+    // (getStatus 수동 폴링 또는 GenerationVideoPollingScheduler)에 GeneratedMediaUploader가 수행한다.
     return generationJobRepository.save(job);
   }
 
@@ -181,7 +217,8 @@ public class GenerationAiService {
       String prompt,
       Integer duration,
       String aspectRatio,
-      Boolean refinePrompt) {
+      Boolean refinePrompt,
+      Long parentMessageId) {
     List<String> safeImages = images == null ? List.of() : images;
     if (safeImages.size() > MAX_REFERENCE_IMAGES) {
       throw new BusinessException(
@@ -202,7 +239,14 @@ public class GenerationAiService {
     GenerationJob job =
         generationJobRepository.save(
             GenerationJob.create(
-                userId, chatId, null, null, GenerationType.VIDEO_GENERATION.name(), prompt, requestPayload));
+                userId,
+                chatId,
+                null,
+                parentMessageId,
+                GenerationType.VIDEO_GENERATION.name(),
+                prompt,
+                requestPayload));
+    generationResultService.startGenerating(userId, chatId);
 
     try {
       Map<String, Object> responsePayload = new LinkedHashMap<>();
@@ -246,9 +290,12 @@ public class GenerationAiService {
     } catch (RestClientResponseException exception) {
       job.fail(exception.getMessage());
       generationJobRepository.save(job);
+      safeFinishGenerating(userId, chatId);
       throw exception;
     }
 
+    // 실제 완료 처리(채팅 메시지/에셋 저장, isGenerating 해제)는 비동기 완료 시점
+    // (getStatus 수동 폴링 또는 GenerationVideoPollingScheduler)에 GeneratedMediaUploader가 수행한다.
     return generationJobRepository.save(job);
   }
 
@@ -279,7 +326,28 @@ public class GenerationAiService {
     newStatus = generatedMediaUploader.applyCompletion(job, newStatus, merged);
 
     job.applyPolledStatus(newStatus, merged);
+    // OptimisticLockingFailureException을 여기서 잡지 않는다: Hibernate가 버전 충돌이 나는 순간
+    // 이 트랜잭션을 이미 rollback-only로 표시하기 때문에, 이 메서드 안에서 잡아서 "복구"를 시도해도
+    // 메서드가 정상 반환된 뒤 커밋 시점에 UnexpectedRollbackException으로 터진다(실측 확인됨).
+    // 그대로 던져 트랜잭션이 깨끗하게 롤백되게 하고, 복구(재조회)는 트랜잭션 경계 밖인
+    // GenerationController에서 한 번 재시도하는 방식으로 처리한다.
     return generationJobRepository.save(job);
+  }
+
+  /**
+   * job.fail() 이후 isGenerating 해제를 시도한다. 채팅방이 그 사이 삭제되는 등으로 이 호출이 실패해도,
+   * 원래 발생한 AI 공급자 예외(catch 블록에서 뒤이어 rethrow됨)를 가려서는 안 되므로 로그만 남기고 넘어간다.
+   */
+  private void safeFinishGenerating(Long userId, Long chatId) {
+    try {
+      generationResultService.finishGenerating(userId, chatId);
+    } catch (RuntimeException exception) {
+      log.warn(
+          "Chat {} (user {}) isGenerating 해제 실패 — 무시하고 원래 예외를 전파합니다.",
+          chatId,
+          userId,
+          exception);
+    }
   }
 
   private GenerationJob findJob(Long jobId) {

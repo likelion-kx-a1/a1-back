@@ -3,6 +3,7 @@ package com.likelion.a1.global.exception;
 import java.util.List;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -32,6 +33,12 @@ public class GlobalExceptionHandler {
     List<String> details =
         List.of(exception.getStatusCode() + ": " + exception.getResponseBodyAsString());
     return ResponseEntity.status(code.status()).body(ErrorResponse.of(code, details));
+  }
+
+  @ExceptionHandler(OptimisticLockingFailureException.class)
+  ResponseEntity<ErrorResponse> handleOptimisticLockConflict(OptimisticLockingFailureException exception) {
+    ErrorCode code = ErrorCode.INVALID_GENERATION_STATE;
+    return ResponseEntity.status(code.status()).body(ErrorResponse.of(code, List.of()));
   }
 
   @ExceptionHandler(DataIntegrityViolationException.class)
