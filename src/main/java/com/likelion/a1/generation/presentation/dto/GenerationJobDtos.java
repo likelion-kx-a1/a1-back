@@ -25,14 +25,16 @@ public final class GenerationJobDtos {
       @NotNull Long chatId,
       String imageBase64,
       String mimeType,
-      @NotBlank String instruction) {}
+      @NotBlank String instruction,
+      Long parentMessageId) {}
 
   public record ReversePromptRequest(
       @NotNull Long userId,
       @NotNull Long chatId,
       @NotBlank String imageBase64,
       @NotBlank String mimeType,
-      @NotBlank String instruction) {}
+      @NotBlank String instruction,
+      Long parentMessageId) {}
 
   /**
    * sheetType/sheetValue는 선택 항목이다(api_3.md 시트 주입 엔진 규격). 생략하거나 null이면
@@ -50,7 +52,8 @@ public final class GenerationJobDtos {
       @NotBlank String modelCode,
       String sheetType,
       String sheetValue,
-      @NotEmpty Map<String, Object> input) {}
+      @NotEmpty Map<String, Object> input,
+      Long parentMessageId) {}
 
   /**
    * highQuality=true면 ByteDance Seedance 2.0, false면 fal.ai Kling O3 Standard 제품군을 호출한다.
@@ -67,7 +70,8 @@ public final class GenerationJobDtos {
       @NotBlank String prompt,
       Integer duration,
       String aspectRatio,
-      Boolean refinePrompt) {}
+      Boolean refinePrompt,
+      Long parentMessageId) {}
 
   public record Response(
       Long id,
