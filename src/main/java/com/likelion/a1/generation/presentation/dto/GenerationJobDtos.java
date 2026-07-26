@@ -1,5 +1,6 @@
 package com.likelion.a1.generation.presentation.dto;
 
+import com.likelion.a1.generation.domain.model.CharacterSheetSettings;
 import com.likelion.a1.generation.domain.model.GenerationJob;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -44,6 +45,13 @@ public final class GenerationJobDtos {
    * - sheetType="CHARACTER_EXPRESSION" + jobType="IMAGE_GENERATION": sheetValue는 사용되지 않음
    *   (9종 감정 3x3 그리드 고정 문구가 결합됨)
    * - sheetType="CUSTOM": sheetValue는 사용자가 직접 편집한 텍스트 그대로
+   *
+   * generationMode/aiEnhance/characterSettings는 캐릭터 시트(Character Design Reference Sheet)
+   * 생성 모드 전용 필드로 모두 선택 항목이다(charactersheet.md 규격). generationMode="character_sheet"
+   * 이면 sheetType/sheetValue는 무시되고 이 전용 파이프라인으로 분기된다:
+   * - aiEnhance=true: Claude Sonnet이 고정 레이아웃 폼으로 재구성한 final_prompt_body를 사용
+   * - aiEnhance=false(또는 생략): 백엔드 고정 템플릿으로 characterSettings를 직접 조립
+   * 두 경우 모두 고정 Requirements 블록이 항상 맨 끝에 결합된다.
    */
   public record FalJobRequest(
       @NotNull Long userId,
@@ -52,6 +60,9 @@ public final class GenerationJobDtos {
       @NotBlank String modelCode,
       String sheetType,
       String sheetValue,
+      String generationMode,
+      Boolean aiEnhance,
+      CharacterSheetSettings characterSettings,
       @NotEmpty Map<String, Object> input,
       Long parentMessageId) {}
 
