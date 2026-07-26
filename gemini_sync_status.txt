@@ -1,11 +1,11 @@
 # a1-back — Gemini AI 동기화 상태 리포트
 
 - 목적: 기획/아키텍처 설계를 담당하는 Gemini AI가 백엔드 프로젝트(a1-back) 현재 상태를 코드 기준으로 100% 파악하기 위한 스냅샷.
-- 브랜치: dev로 머지 예정인 로컬 작업 브랜치 `chore/checkout` (HEAD: `842cfdb ref : 배치 전체 롤백 방지를 위해 GenerationJobPoller에 job별 처리를 위임하도록 스케줄러 단순화`). `dev`에서 분기한 뒤 아직 PR로 올라가지 않은 상태이며, `dev` 자체의 HEAD는 여전히 `5087a28`이다.
-- 생성 기준: 2026-07-23(같은 날짜 내에서 §2 이슈 1/3 해결, `GenerationResultService` 배선, 동시성 방어(낙관적 락) 도입까지 이어진 여러 커밋을 반영). 아래 각 섹션은 실제 저장소 파일을 그대로 읽어 취합한 것이며, 별도로 요약/각색하지 않았다.
-- 빌드/테스트 상태: `./gradlew clean build` 기준 컴파일 경고 0건, 전체 테스트(1건: `A1BackApplicationTests#contextLoads`) 통과. 이 저장소에는 이 컨텍스트 로드 테스트 외의 단위/통합 테스트가 없다. **이번 스냅샷의 동시성 수정은 자동 테스트가 아니라 로컬 Postgres(Docker Compose)에 실제로 붙여 동시 요청을 여러 번 재현시켜 검증했다(§6 참고) — 그 과정에서 실제 운영 버그(`UnexpectedRollbackException`) 하나를 발견해 함께 고쳤다.**
+- 브랜치: `dev`(HEAD `39ac4e9 Merge pull request #34 from likelion-kx-a1/chore/checkout`)에서 분기한 로컬 작업 브랜치 `feature/csheet` (HEAD: `1cf3e4e feat : 캐릭터시트 목업 추가`, `origin/feature/csheet`와 동기화됨, 워킹트리 클린). `dev` 분기 이후 8개 커밋 전부가 `docs_h/charactersheet.md` 규격의 캐릭터 시트(Character Design Reference Sheet) 생성 모드 백엔드 구현이며, 아직 PR로 올라가지 않은 상태다. `dev` 자체의 HEAD는 여전히 `39ac4e9`.
+- 생성 기준: 2026-07-26(캐릭터 시트 생성 모드 백엔드 구현 8개 커밋을 반영). 아래 각 섹션은 실제 저장소 파일을 그대로 읽어 취합한 것이며, 별도로 요약/각색하지 않았다.
+- 빌드/테스트 상태: `./gradlew compileJava` 클린 컴파일 확인(2026-07-26). 이 저장소에는 여전히 `A1BackApplicationTests#contextLoads` 외의 단위/통합 테스트가 없어 캐릭터 시트 신규 코드도 자동 테스트로 검증되지 않았다 — 컴파일 성공 + 코드 리뷰(신규 파일 6개 전수 확인, 기존 4개 파일 diff 확인)로만 검증했다. **이전 스냅샷(2026-07-23, `chore/checkout` 브랜치)의 동시성 수정은 로컬 Postgres 실측까지 마쳤던 것과 달리, 이번 캐릭터 시트 기능은 실제 Claude/fal.ai API 호출(prod 어댑터) 또는 로컬 Postgres 연동 없이 정적 검증만 이뤄진 상태임을 구분해서 인지할 것.**
 
-> **✅ 이전 스냅샷(2026-07-23 오전, HEAD `5087a28`) 대비 변경점 요약**: (1) §2 이슈 1의 죽은 중복 리포지토리 삭제, (2) §2 이슈 3의 `GenerationController` 인증 우회 수정(`@AuthenticationPrincipal` + 소유권 검증), (3) 이전 스냅샷엔 이슈로 기록되지 않았지만 실제로는 완전히 미배선 상태였던 `GenerationResultService`(채팅 메시지/에셋 저장, `Chat.isGenerating` 토글)를 실제 파이프라인에 연결, (4) `GenerationJob`에 `@Version` 낙관적 락 도입 + 동시 완료 처리 중복 방지, (5) 생성 요청 4종 DTO에 `parentMessageId` 추가, (6) `ChatMessage`에 `generationJobId`/`generatedAssetId` 연관 매핑. 상세는 신설 §6 "GenerationResultService 배선 · parentMessageId · 동시성 방어(낙관적 락)"을 참고. 이 다섯 가지 전부 실제 코드 diff와(동시성 방어는) 로컬 Postgres 실측까지 근거로 확인했다.
+> **✅ 이전 스냅샷(2026-07-23, HEAD `842cfdb`, `chore/checkout` 브랜치) 대비 변경점 요약**: `chore/checkout`은 이미 PR #34로 `dev`에 머지 완료됐고(§2 이슈 1/3 해결, `GenerationResultService` 배선, 동시성 방어(낙관적 락) 도입 — 상세는 §6 유지), 이번 스냅샷은 그 `dev` 위에서 새로 분기한 `feature/csheet` 브랜치의 **캐릭터 시트(Character Design Reference Sheet) 생성 모드 백엔드**를 반영한다: (1) 신규 `GenerationMode` enum(§3)으로 `generation_mode: "character_sheet"` 요청을 시트 주입 엔진(`SheetType`)과 분리된 전용 파이프라인으로 분기, (2) 신규 `CharacterSheetSettings` 레코드(§3)로 우측 드로어 선택 입력 8종을 표현, (3) 신규 `CharacterSheetPromptPort`(§4) + `ClaudeCharacterSheetPromptAdapter`(prod)/`MockCharacterSheetPromptAdapter`(local) — `ai_enhance=true`일 때 Claude Sonnet이 고정 레이아웃 폼으로 프롬프트를 재구성, (4) 신규 `CharacterSheetPromptTemplate` — `ai_enhance=false`일 때 로컬 템플릿 조립 + 두 경우 모두 고정 Requirements 블록 결합, (5) `GenerationAiService.submitFalJob`에 `submitCharacterSheetFalJob` 분기 추가, (6) `GenerationController`/`GenerationJobDtos.FalJobRequest`에 `generationMode`/`aiEnhance`/`characterSettings` 필드 배선, (7) `PerformanceMetrics`에 `characterSheetPromptDurationMs` 지표 추가. 상세는 신설 §7 "캐릭터 시트(Character Design Reference Sheet) 생성 모드"를 참고. DB 마이그레이션은 추가되지 않았다(기존 JSONB `requestPayload`/`responsePayload` 컬럼을 그대로 사용).
 
 ---
 
@@ -49,25 +49,29 @@ com
           port
             out
               AiTextGenerationResult.java
+              CharacterSheetPromptPort.java   (신규 — §4/§7 참고. `ai_enhance=true`일 때만 호출되는 Claude Sonnet 프롬프트 재구성 포트)
               FalGenerationPort.java
               FalGenerationStatus.java
               FalGenerationSubmission.java
               ImageAnalysisPort.java
               PromptGenerationPort.java
           service
+            CharacterSheetPromptTemplate.java   (신규, package-private — §7 참고. `ai_enhance=false` 고정 템플릿 조립 + 항상 결합되는 Requirements 블록)
             GeneratedMediaUploader.java   (완료 처리 시 §6의 동시성 중복 스킵 가드 + `GenerationResultService` 호출 포함)
-            GenerationAiService.java   (4개 생성 메서드가 이제 `parentMessageId`를 받아 `GenerationResultService`와 연동 — §6 참고)
-            GenerationJobPoller.java   (신규 — job 하나를 REQUIRES_NEW 독립 트랜잭션으로 폴링/완료 처리, §6 참고)
-            GenerationResultService.java   ✅ 이전 스냅샷까지 완전히 미배선 상태였던 죽은 코드였으나 이번에 실제로 연결됨(§6 참고) — 더 이상 죽은 코드 아님
-            GenerationVideoPollingScheduler.java   (`GenerationJobPoller`에 job별 처리를 위임하는 얇은 스케줄러로 축소 — §6 참고)
-            PerformanceMetrics.java
+            GenerationAiService.java   (4개 생성 메서드가 `parentMessageId`를 받아 `GenerationResultService`와 연동 — §6 참고. `submitFalJob`에 캐릭터 시트 전용 분기 `submitCharacterSheetFalJob` 추가 — §7 참고)
+            GenerationJobPoller.java   (job 하나를 REQUIRES_NEW 독립 트랜잭션으로 폴링/완료 처리, §6 참고)
+            GenerationResultService.java   (채팅 메시지/에셋 저장, `Chat.isGenerating` 토글 — §6 참고)
+            GenerationVideoPollingScheduler.java   (`GenerationJobPoller`에 job별 처리를 위임하는 얇은 스케줄러 — §6 참고)
+            PerformanceMetrics.java   (신규 지표 `characterSheetPromptDurationMs` 추가 — §7 참고)
             SheetPromptComposer.java
         domain
           event
             GenerationCompletedEvent.java   (`sse` 패키지가 구독하는 도메인 이벤트)
           model
             AiModel.java
-            GenerationJob.java   (신규 `@Version` 필드로 낙관적 락 적용 — §6, 마이그레이션 V9 참고)
+            CharacterSheetSettings.java   (신규 — §3/§7 참고. 캐릭터 시트 우측 드로어 선택 입력 8종을 담는 record)
+            GenerationJob.java   (`@Version` 필드로 낙관적 락 적용 — §6, 마이그레이션 V9 참고)
+            GenerationMode.java   (신규 — §3/§7 참고. `generation_mode` 요청 값을 DEFAULT/CHARACTER_SHEET로 분기하는 enum)
             GenerationQueue.java
             GenerationStatus.java   (enum)
             GenerationType.java     (enum)
@@ -77,7 +81,9 @@ com
         infrastructure
           client
             claude
+              ClaudeCharacterSheetPromptAdapter.java   (신규, @Profile("prod") — §7 참고. `docs_h/charactersheet.md` 2번 System Prompt로 Claude Sonnet 호출)
               ClaudePromptGenerationAdapter.java   (@Profile("prod"))
+              MockCharacterSheetPromptAdapter.java     (신규, @Profile({"local","default"}) — §7 참고)
               MockPromptGenerationAdapter.java      (@Profile({"local","default"}))
             fal
               FalGenerationAdapter.java             (@Profile("prod"))
@@ -90,9 +96,9 @@ com
             SpringDataGenerationJobRepository.java
         presentation
           controller
-            GenerationController.java   (신규: `@AuthenticationPrincipal JwtPrincipal` 주입 + `userId` 소유권 검증 — §2 이슈 3 해결. 낙관적 락 충돌 재시도 래퍼도 여기 있음 — §6 참고)
+            GenerationController.java   (`@AuthenticationPrincipal JwtPrincipal` 주입 + `userId` 소유권 검증 — §2 이슈 3 해결. 낙관적 락 충돌 재시도 래퍼도 여기 있음 — §6 참고. `submitFalJob` 호출부에 `generationMode`/`aiEnhance`/`characterSettings` 전달 추가 — §7 참고)
           dto
-            GenerationJobDtos.java   (신규: 생성 요청 4종에 `parentMessageId` 필드 추가 — §6 참고)
+            GenerationJobDtos.java   (생성 요청 4종에 `parentMessageId` 필드 추가 — §6 참고. `FalJobRequest`에 `generationMode`/`aiEnhance`/`characterSettings` 필드 추가 — §7 참고)
             GenerationResultDtos.java
       global
         config
@@ -262,7 +268,9 @@ com
 >
 > **참고 (2026-07-22 → 2026-07-23 오전 변경점)**: `feature/sse_asset`(PR #33)이 `dev`에 머지되어 `sse` 패키지 전체와 `generation/domain/event/GenerationCompletedEvent.java`가 신규 반영됐다. 이 패키지가 대체하는 것은 프론트가 기존에 쓰던 "생성 상태 3초 폴링" 방식이며, `notification` 테이블/도메인과는 무관한 별개의 ad-hoc 인메모리 push 파이프라인이다(§2 이슈 6 참고).
 >
-> **참고 (2026-07-23 오전 → 오후 변경점, `chore/checkout` 브랜치)**: `dev`(HEAD `5087a28`) 이후 `dev`에서 분기한 로컬 브랜치에서 다음이 진행됐다 — §2 이슈 1(죽은 중복 리포지토리) 삭제, 이슈 3(`GenerationController` 인증 우회) 수정, 완전히 미배선 상태였던 `GenerationResultService` 실배선, `GenerationJob.@Version` 낙관적 락 도입과 그 과정에서 실측으로 발견한 `UnexpectedRollbackException` 버그 수정, `parentMessageId`/`ChatMessage` 연관 매핑 추가. 상세는 신설 §6.
+> **참고 (2026-07-23 오전 → 오후 변경점, `chore/checkout` 브랜치, PR #34로 `dev`에 이미 머지됨)**: `dev`(당시 HEAD `5087a28`) 이후 분기한 브랜치에서 §2 이슈 1(죽은 중복 리포지토리) 삭제, 이슈 3(`GenerationController` 인증 우회) 수정, 완전히 미배선 상태였던 `GenerationResultService` 실배선, `GenerationJob.@Version` 낙관적 락 도입과 그 과정에서 실측으로 발견한 `UnexpectedRollbackException` 버그 수정, `parentMessageId`/`ChatMessage` 연관 매핑 추가가 진행됐다. 상세는 §6.
+>
+> **참고 (2026-07-23 오후 → 2026-07-26 변경점, `feature/csheet` 브랜치, 아직 미머지)**: `dev`(HEAD `39ac4e9`, `chore/checkout` PR #34 머지 직후)에서 새로 분기해 `docs_h/charactersheet.md` 규격의 캐릭터 시트(Character Design Reference Sheet) 생성 모드 백엔드를 구현했다 — `GenerationMode`/`CharacterSheetSettings`(신규 도메인 모델), `CharacterSheetPromptPort` + `ClaudeCharacterSheetPromptAdapter`/`MockCharacterSheetPromptAdapter`(신규 Claude 연동), `CharacterSheetPromptTemplate`(신규 로컬 조립 템플릿), `GenerationAiService.submitFalJob`의 신규 분기, 컨트롤러/DTO 배선. 시트 주입 엔진(`SheetType`/`SheetPromptComposer`)이나 §5/§6의 SSE·동시성 로직은 이 기능과 무관하게 그대로 유지된다. 상세는 신설 §7.
 
 ---
 
@@ -311,6 +319,12 @@ com
 
 12. **(신규) 생성 요청 DTO의 `parentMessageId`는 존재/소유권 검증이 없다.**
     `PromptRequest`/`ReversePromptRequest`/`FalJobRequest`/`VideoGenerationRequest`(§6 참고)에 새로 추가된 `parentMessageId`는 애플리케이션 코드 어디서도 "그 메시지가 실제로 존재하는지", "그 메시지가 이 요청의 `chatId`와 같은 채팅방 소속인지"를 검증하지 않는다. `generation_jobs.request_message_id`가 `chat_messages(id)`를 가리키는 FK(`ON DELETE SET NULL`, V1)라서 **존재하지 않는 id는 INSERT 시 FK 위반으로 걸러지지만**(`GlobalExceptionHandler.handleDataIntegrityViolation` → 400), **다른 채팅방(심지어 다른 사용자)의 실존 메시지 id를 넣는 것은 FK 통과 후 그대로 저장된다.** 실질적으로는 `ChatMessage.parentMessageId`/응답 조회 시 다소 앞뒤가 안 맞는 데이터가 생기는 정도의 영향이라 심각도는 낮지만, 문서화 목적상 기록해둔다.
+
+13. **(신규, `feature/csheet` 브랜치) `GenerationMode.fromRequest`는 `SheetType.fromRequest`와 달리 알 수 없는 값을 조용히 기본값으로 흡수한다.**
+    같은 `generation` 도메인 안에 요청 문자열을 enum으로 바꾸는 두 팩토리가 있는데 검증 강도가 다르다. `SheetType.fromRequest(String)`(`domain/model/SheetType.java`)은 `null`/blank만 `NONE`으로 보고 그 외 인식 불가 값은 `BusinessException(INVALID_INPUT)`(400)을 던진다. 반면 `GenerationMode.fromRequest(String)`(`domain/model/GenerationMode.java`)은 `"character_sheet"`(대소문자 무관) 외 **어떤 값이든**(오타, `"CHARACTER_SHEET "` 이외의 변형, 심지어 `"video"` 같은 완전히 다른 값) 예외 없이 `DEFAULT`로 흡수해 기존 시트 주입 엔진 경로로 흘려보낸다. FE가 `generation_mode` 철자를 잘못 보내도 400이 아니라 "캐릭터 시트 모드가 조용히 무시되고 기본 이미지 생성 경로로 처리됨"이라는, 디버깅하기 까다로운 실패 모드가 된다. 의도적 설계(하위 호환 유지 우선)일 수도 있으나, `SheetType`과의 비일관성은 문서화해둔다.
+
+14. **(신규, `feature/csheet` 브랜치) `characterSettings`(레코드)가 다른 `requestPayload` 필드들과 달리 JSON 맵에 원시 객체로 그대로 저장된다.**
+    `GenerationAiService.submitCharacterSheetFalJob`이 `requestPayload.put("characterSettings", settings)`로 `CharacterSheetSettings` 레코드 인스턴스를 그대로 넣는다 — 나머지 필드는 전부 `String`/`Boolean`/`Map`/`List` 등 원시·컬렉션 값이다. Jackson이 레코드를 표준적으로(record component 기반) 직렬화하므로 `GenerationJob.requestPayload`(`@JdbcTypeCode(SqlTypes.JSON)`) 저장 자체는 문제없이 동작할 것으로 판단되지만(정적 검증만 했고 실제 DB 왕복 테스트는 아직 없음 — 위 빌드/테스트 상태 참고), 다른 코드와의 스타일 일관성 관점에서 사소한 차이로 기록해둔다.
 
 ---
 
@@ -910,6 +924,64 @@ public enum SheetType {
 - `CUSTOM`: `sheetValue`(필수, 없으면 400) 그대로 결합.
 - `CHARACTER_EXPRESSION` + 비디오 jobType: `sheetValue`는 `HARMONIOUS|CHILLY|MYSTERIOUS|DRAMATIC` 중 하나(아니면 400), 각각 고정 분위기 프리셋 문구로 매핑.
 - `CHARACTER_EXPRESSION` + 이미지 jobType: `sheetValue` 무시, "3x3 표정 그리드"(JOY/ANGER/SADNESS/EXCITEMENT/SURPRISE/FEAR/DISGUST/CALMNESS/DESIRE) 고정 문구 결합.
+
+### `generation/domain/model/GenerationMode.java` (Enum — 신규, `feature/csheet` 브랜치)
+
+```java
+package com.likelion.a1.generation.domain.model;
+
+/**
+ * fal.ai 제출({@code /fal-jobs}) 요청의 생성 모드. CHARACTER_SHEET는 캐릭터 디자인 레퍼런스 시트
+ * 전용 파이프라인(charactersheet.md 규격)으로 분기하고, 그 외 값(또는 생략)은 기존 시트 주입 엔진
+ * ({@link SheetType})이 그대로 동작하는 기본 경로로 취급한다.
+ */
+public enum GenerationMode {
+  DEFAULT,
+  CHARACTER_SHEET;
+
+  /** null이거나 "character_sheet"(대소문자 무관)가 아니면 모두 DEFAULT로 간주해 기존 호출자와 호환된다. */
+  public static GenerationMode fromRequest(String value) {
+    if (value == null) {
+      return DEFAULT;
+    }
+    return "character_sheet".equalsIgnoreCase(value.trim()) ? CHARACTER_SHEET : DEFAULT;
+  }
+}
+```
+
+> `SheetType.fromRequest`와 달리 인식 불가 값에 대해 400을 던지지 않고 조용히 `DEFAULT`로 흡수한다 — §2 이슈 13 참고.
+
+### `generation/domain/model/CharacterSheetSettings.java` (record — 신규, `feature/csheet` 브랜치)
+
+```java
+package com.likelion.a1.generation.domain.model;
+
+import java.util.List;
+
+/**
+ * '캐릭터 설정' 우측 드로어에서 입력받는 선택 필드(charactersheet.md 1.1). 모든 필드는 선택 사항이며,
+ * null/blank 필드는 {@link com.likelion.a1.generation.application.service.CharacterSheetPromptTemplate}가
+ * 최종 프롬프트에서 해당 섹션 자체를 생략한다(임의로 값을 지어내지 않음).
+ */
+public record CharacterSheetSettings(
+    String name,
+    String ageGenderRole,
+    String appearance,
+    String clothing,
+    String accessoriesProps,
+    String personality,
+    String abilityWorld,
+    List<String> keyColors) {
+
+  private static final CharacterSheetSettings EMPTY =
+      new CharacterSheetSettings(null, null, null, null, null, null, null, List.of());
+
+  /** FE가 드로어를 아예 열지 않아 characterSettings 자체가 null로 오는 경우를 안전하게 흡수한다. */
+  public static CharacterSheetSettings orEmpty(CharacterSheetSettings settings) {
+    return settings == null ? EMPTY : settings;
+  }
+}
+```
 
 ### `media/domain/model/AssetFile.java`
 
@@ -2042,6 +2114,26 @@ public interface FalGenerationPort {
 }
 ```
 
+### `generation/application/port/out/CharacterSheetPromptPort.java` (신규, `feature/csheet` 브랜치)
+
+```java
+package com.likelion.a1.generation.application.port.out;
+
+import com.likelion.a1.generation.domain.model.CharacterSheetSettings;
+
+/**
+ * Claude Sonnet API - 캐릭터 시트(Character Design Reference Sheet) 생성 모드에서 ai_enhance=true일 때만
+ * 호출된다. 사용자의 핵심 설명(core_description)과 드로어 입력값을 charactersheet.md 2번 규격의 고정
+ * 레이아웃 폼으로 재구성한 final_prompt_body를 반환한다.
+ */
+public interface CharacterSheetPromptPort {
+  AiTextGenerationResult generateFinalPromptBody(
+      String coreDescription, CharacterSheetSettings settings, boolean hasReferenceImages);
+}
+```
+
+`PromptGenerationPort`(무중력 물리 보정)와 별개의 포트로 분리한 이유: 반환 타입은 같은 `AiTextGenerationResult`이지만, 입력 형태(이미지+한국어 지시문 vs. `core_description`+구조화된 `CharacterSheetSettings`)와 System Prompt 계약(자유 영문 프롬프트 vs. `{"final_prompt_body": "..."}` 고정 JSON 스키마 강제)이 근본적으로 달라 하나의 포트로 억지로 묶으면 인터페이스가 두 계약을 다 감당해야 했기 때문이다.
+
 ### `media/application/port/out/MediaStoragePort.java`
 
 > **변경점**: 이전 스냅샷은 `store(byte[], contentType, extension)` / `storeFromUrl(...)` 형태였다. 현재는 command/result 레코드 기반으로 재설계되었고 `download`가 신규 추가되었다.
@@ -2369,7 +2461,7 @@ public final class SseDtos {
 
 ### 마이그레이션/설정 영향
 
-이 파이프라인은 새 Flyway 마이그레이션을 추가하지 않았다(§7 마이그레이션 목록 참고 — SSE 이후 V9까지 추가된 건 §6의 `@Version` 관련 마이그레이션 하나뿐, SSE 자체는 여전히 마이그레이션 없음). `application.yml`에도 SSE 전용 설정 키가 없다 — 타임아웃(`TIMEOUT_MS = 30분`)과 하트비트 주기(`30초`)가 모두 코드에 하드코딩되어 있다.
+이 파이프라인은 새 Flyway 마이그레이션을 추가하지 않았다(§8 마이그레이션 목록 참고 — SSE 이후 V9까지 추가된 건 §6의 `@Version` 관련 마이그레이션 하나뿐, SSE 자체는 여전히 마이그레이션 없음). `application.yml`에도 SSE 전용 설정 키가 없다 — 타임아웃(`TIMEOUT_MS = 30분`)과 하트비트 주기(`30초`)가 모두 코드에 하드코딩되어 있다.
 
 ---
 
@@ -2418,7 +2510,7 @@ public MessageResponse attachGenerationResult(
 
 **문제**: 수동 폴링(`GET /fal-jobs/{jobId}/status`)과 5초 주기 백그라운드 스케줄러가 같은 `GenerationJob`을 동시에 완료 처리하면, 채팅 메시지/에셋이 중복 생성되거나 job 상태가 조용히 덮어써질 수 있었다(이전 스냅샷 이슈 11 근처에서 이미 지적됐던 구조적 위험).
 
-**1차 조치**: `GenerationJob`에 `@Version private Long version`(마이그레이션 V9, §3/§7 참고) 추가, `GenerationJobRepositoryAdapter.save()`를 `saveAndFlush`로 바꿔 버전 충돌을 그 자리에서 즉시 감지, `GeneratedMediaUploader.applyCompletion()`에 `isAlreadyFinalized(jobId)` 가드 추가(DB에서 이미 종결 상태로 확인되면 S3 재업로드·메시지 중복 생성을 스킵).
+**1차 조치**: `GenerationJob`에 `@Version private Long version`(마이그레이션 V9, §3/§8 참고) 추가, `GenerationJobRepositoryAdapter.save()`를 `saveAndFlush`로 바꿔 버전 충돌을 그 자리에서 즉시 감지, `GeneratedMediaUploader.applyCompletion()`에 `isAlreadyFinalized(jobId)` 가드 추가(DB에서 이미 종결 상태로 확인되면 S3 재업로드·메시지 중복 생성을 스킵).
 
 **여기서 실제 버그 발견**: `GenerationAiService.getStatus()`가 `saveAndFlush`의 `OptimisticLockingFailureException`을 같은 `@Transactional` 메서드 안에서 잡아 "복구"를 시도했는데, **로컬 Postgres에 실제로 붙여 8-way 동시 요청으로 재현**하자 로그에 정상적으로 catch 로그가 찍힌 직후 곧바로 `org.springframework.transaction.UnexpectedRollbackException: Transaction silently rolled back because it has been marked as rollback-only`가 터졌다(HTTP 응답 하나가 빈 바디로 크래시). 원인: Hibernate/Spring이 낙관적 락 충돌이 발생한 순간 그 트랜잭션을 이미 rollback-only로 표시해버려서, 같은 트랜잭션 안에서 예외를 잡고 정상 반환해도 메서드 종료 후 커밋 시점에 다시 터진다.
 
@@ -2528,7 +2620,121 @@ class GenerationJobPoller {
 
 ---
 
-## 7. Configuration — `src/main/resources/application.yml`
+## 7. 캐릭터 시트(Character Design Reference Sheet) 생성 모드 — 신규(`feature/csheet` 브랜치)
+
+FE 기획 문서 `docs_h/charactersheet.md`(레포에 존재, §9 참고) 규격대로, 이미지 생성 모드 안에 "캐릭터 시트" 전용 서브모드를 추가한 것. 캐릭터 턴어라운드/표정/소품/색상 팔레트 등을 한 장에 담는 GPT Image 2용 구조화 프롬프트를 만들어내는 게 목적이며, 기존 시트 주입 엔진(`SheetType`/`SheetPromptComposer` — §1, §3 참고)과는 완전히 별개의 파이프라인이다. **DB 마이그레이션은 추가되지 않았다** — `GenerationJob.requestPayload`/`responsePayload`가 이미 범용 JSONB라 그대로 재사용한다.
+
+### 요청 계약 — `POST /api/v1/generation/fal-jobs`에 추가된 필드
+
+`GenerationJobDtos.FalJobRequest`(§1)에 3개 필드가 추가됐고 전부 선택 사항이다(생략 시 기존 시트 주입 엔진 경로와 100% 호환):
+
+| 필드 | 타입 | 의미 |
+|---|---|---|
+| `generationMode` | `String` | `"character_sheet"`(대소문자 무관)이면 이 전용 파이프라인으로 분기. 그 외/생략은 기존 경로(`GenerationMode.fromRequest` — §3, §2 이슈 13 참고) |
+| `aiEnhance` | `Boolean` | `true`면 Claude Sonnet 호출, `false`(또는 생략)면 로컬 템플릿 조립 |
+| `characterSettings` | `CharacterSheetSettings`(§3) | 우측 드로어 선택 입력 8종(`name`/`ageGenderRole`/`appearance`/`clothing`/`accessoriesProps`/`personality`/`abilityWorld`/`keyColors`), 전부 선택 사항이며 `characterSettings` 자체가 `null`이어도 `CharacterSheetSettings.orEmpty(...)`가 안전하게 흡수 |
+
+`sheetType`/`sheetValue`는 `generationMode="character_sheet"`일 때 완전히 무시된다(값이 와도 읽지 않음).
+
+### 분기 로직 — `GenerationAiService.submitFalJob` → `submitCharacterSheetFalJob`
+
+`submitFalJob`은 기존 `GenerationType` 파싱 직후, 시트 주입 엔진 로직(`SheetPromptComposer.compose(...)`)을 타기 **전에** 먼저 `GenerationMode.fromRequest(generationMode) == GenerationMode.CHARACTER_SHEET`인지 확인해 맞으면 별도 메서드로 완전히 분기한다(아래 그대로면 기존 `originalPrompt`/`composedPrompt`/`sheetType` 로직은 실행되지 않는다):
+
+```java
+public GenerationJob submitFalJob(
+    Long userId, Long chatId, String jobType, String modelCode, Map<String, Object> input,
+    String sheetType, String sheetValue, String generationMode, Boolean aiEnhance,
+    CharacterSheetSettings characterSettings, Long parentMessageId) {
+  GenerationType type = parseGenerationType(jobType);
+
+  if (GenerationMode.fromRequest(generationMode) == GenerationMode.CHARACTER_SHEET) {
+    return submitCharacterSheetFalJob(
+        userId, chatId, type, modelCode, input, aiEnhance, characterSettings, parentMessageId);
+  }
+  // ... 이하 기존 시트 주입 엔진 경로(SheetPromptComposer) 그대로, 변경 없음
+}
+```
+
+`submitCharacterSheetFalJob`(신규, private) 전체:
+
+```java
+private GenerationJob submitCharacterSheetFalJob(
+    Long userId, Long chatId, GenerationType type, String modelCode, Map<String, Object> input,
+    Boolean aiEnhance, CharacterSheetSettings characterSettings, Long parentMessageId) {
+  String coreDescription = input.get("prompt") instanceof String promptText ? promptText : null;
+  boolean hasReferenceImages = input.get("images") instanceof List<?> images && !images.isEmpty();
+  CharacterSheetSettings settings = CharacterSheetSettings.orEmpty(characterSettings);
+  boolean shouldEnhance = Boolean.TRUE.equals(aiEnhance);
+
+  Map<String, Object> requestPayload = new LinkedHashMap<>();
+  requestPayload.put("modelCode", modelCode);
+  requestPayload.put("input", input);
+  requestPayload.put("generationMode", "character_sheet");
+  requestPayload.put("aiEnhance", shouldEnhance);
+  requestPayload.put("characterSettings", settings);   // §2 이슈 14 참고 — 레코드를 그대로 저장
+
+  GenerationJob job = generationJobRepository.save(
+      GenerationJob.create(userId, chatId, null, parentMessageId, type.name(), coreDescription, requestPayload));
+  generationResultService.startGenerating(userId, chatId);
+
+  try {
+    long composeStartedAtMs = System.currentTimeMillis();
+    String promptBody = shouldEnhance
+        ? characterSheetPromptPort.generateFinalPromptBody(coreDescription, settings, hasReferenceImages).text()
+        : CharacterSheetPromptTemplate.buildDirect(coreDescription, settings, hasReferenceImages);
+    String finalPrompt = CharacterSheetPromptTemplate.appendRequirements(promptBody);
+    long composeDurationMs = System.currentTimeMillis() - composeStartedAtMs;
+
+    Map<String, Object> effectiveInput = new LinkedHashMap<>(input);
+    effectiveInput.put("prompt", finalPrompt);
+
+    long submitStartedAtMs = System.currentTimeMillis();
+    FalGenerationSubmission submission = falGenerationPort.submit(modelCode, effectiveInput);
+    long submissionLatencyMs = System.currentTimeMillis() - submitStartedAtMs;
+
+    Map<String, Object> responsePayload = new LinkedHashMap<>();
+    responsePayload.put("finalPrompt", finalPrompt);
+    responsePayload.put("requestId", submission.externalRequestId());
+    responsePayload.put("statusUrl", submission.statusUrl());
+    responsePayload.put("responseUrl", submission.responseUrl());
+    responsePayload.put("raw", submission.rawResponse());
+    PerformanceMetrics.record(responsePayload, "characterSheetPromptDurationMs", composeDurationMs);
+    PerformanceMetrics.record(responsePayload, "submissionLatencyMs", submissionLatencyMs);
+    PerformanceMetrics.announce(job.getId(), responsePayload);
+    job.markQueued(responsePayload);
+  } catch (RestClientResponseException exception) {
+    job.fail(exception.getMessage());
+    generationJobRepository.save(job);
+    safeFinishGenerating(userId, chatId);
+    throw exception;
+  }
+
+  return generationJobRepository.save(job);
+}
+```
+
+핵심 설계 결정 두 가지:
+- **`job.prompt`에는 `core_description`(사용자 원본 입력)만 저장하고, 실제로 fal.ai에 보낸 최종 결합 프롬프트는 `responsePayload.finalPrompt`에 기록한다** — `generateVideo`가 `refinedPrompt`를 responsePayload에 남기는 것과 동일한 관례(§1 참고)를 그대로 따른다.
+- **완료 처리(비동기 폴링, 채팅 메시지/에셋 생성)는 이 메서드가 건드리지 않는다** — `GeneratedMediaUploader`/`GenerationJobPoller`(§6)가 `GenerationType`만 보고 공통으로 처리하므로, 캐릭터 시트 job도 일반 `IMAGE_GENERATION` job과 동일한 완료 경로를 그대로 탄다. fal.ai 제출(`FalGenerationAdapter` — §8 표 참고)도 GPT Image 2를 포함해 모델 코드를 그대로 라우팅하는 기존 어댑터를 재사용하므로 이 기능을 위해 별도로 수정된 것이 없다.
+
+### `ai_enhance` 분기의 두 경로
+
+**`ai_enhance=false`(또는 생략) — `CharacterSheetPromptTemplate.buildDirect(...)`**(§1 참고, `application/service/CharacterSheetPromptTemplate.java`, package-private): Claude를 거치지 않고 `coreDescription` + `CharacterSheetSettings`를 `docs_h/charactersheet.md` 3번의 `buildDirectCharacterSheetPrompt` TypeScript 예시와 동일한 섹션 순서(CORE CONCEPT → CHARACTER NAME(있을 때만) → SUBJECT → APPEARANCE → FACE/EXPRESSIONS → BODY/TURNAROUND → CLOTHING → ACCESSORIES/PROPS → DETAIL HIGHLIGHTS → COLOR PALETTE → PERSONALITY → ABILITY/WORLD → (참조 이미지 있으면)REFERENCE IMAGE INSTRUCTIONS → LAYOUT → STYLE → LIGHTING → BACKGROUND → ASPECT RATIO → CONSTRAINTS)로 문자열 조립한다. 값이 없는 선택 필드(name/appearance/clothing 등)는 해당 섹션 헤딩 자체를 건너뛴다(`addIfPresent` 헬퍼) — 특히 `name`이 없으면 "CHARACTER NAME:" 섹션과 프로즈 블록의 "Character name: ..." 문구를 **완전히 생략**해 임의로 이름을 지어내지 않는다(charactersheet.md 규칙 5번).
+
+**`ai_enhance=true` — `CharacterSheetPromptPort.generateFinalPromptBody(...)`**(§4 참고) → prod에서는 `ClaudeCharacterSheetPromptAdapter`(`infrastructure/client/claude/`, `@Profile("prod")`), local/default에서는 `MockCharacterSheetPromptAdapter`(`@Profile({"local","default"})`, 실제 호출 없이 1초 대기 후 고정 mock 본문 반환). prod 어댑터는 기존 `ClaudePromptGenerationAdapter`(§1)와 완전히 동일한 구조(생성자 `@Value` 4종 — `app.ai.claude.base-url`/`api-key`/`model`/`version`, 같은 `RestTemplate`/`tools.jackson.databind.ObjectMapper`, 같은 `AI_PROVIDER_REQUEST_FAILED` 에러 코드)를 그대로 따르되:
+- System Prompt는 `docs_h/charactersheet.md` 2번 절의 텍스트를 문자 그대로(계약 준수를 위해 임의 요약/변형 없이) 사용한다 — 사용자 입력을 절대 진리로 취급, 이름 미제공 시 이름 생성 금지, 항상 16:9, 고정 섹션 구조 강제, 그리고 **응답을 `{"final_prompt_body": "..."}` 형태의 JSON 하나로만 반환하라는 7번 규칙**이 핵심.
+- `extractFinalPromptBody(...)`가 Claude 응답에서 이 JSON을 파싱해 `final_prompt_body`를 꺼내며, Claude가 7번 규칙을 어기고 \`\`\`json 코드펜스로 감싸 응답하는 경우까지 `stripCodeFence(...)`로 방어한다.
+- 요청 바디의 user 메시지에는 `core_description`/`character_settings`(8개 필드 그대로)/`has_reference_images`를 담은 JSON 텍스트 하나만 넣는다(참조 이미지 자체를 Claude에 첨부하지는 않음 — 텍스트 지시로만 존재 여부를 알려준다).
+
+두 경로 모두 마지막에 `CharacterSheetPromptTemplate.appendRequirements(...)`가 `docs_h/charactersheet.md` 4번의 고정 `Requirements:` 블록(7개 항목 — 사용자 요청 최우선, 구조화된 시트 형태 유지, 무관한 캐릭터/로고/워터마크 금지 등)을 항상 맨 끝에 결합한다. 이 블록은 `ai_enhance` 값과 무관하게 항상 붙는다.
+
+### 검증 상태
+
+`./gradlew compileJava` 클린 컴파일(경고 0건) + 신규 파일 6개(`GenerationMode`/`CharacterSheetSettings`/`CharacterSheetPromptPort`/`CharacterSheetPromptTemplate`/`ClaudeCharacterSheetPromptAdapter`/`MockCharacterSheetPromptAdapter`) 및 기존 4개 파일(`GenerationAiService`/`GenerationController`/`GenerationJobDtos`/`PerformanceMetrics`) diff를 전수 읽어 배선 정합성(생성자 주입, 프로필별 빈 충돌 없음, `AiTextGenerationResult`/`GenerationJob.create`/`PerformanceMetrics` 시그니처 일치 등)을 확인했다. `src/test`에는 이 변경으로 깨지는 기존 테스트가 없다(컨텍스트 로드 테스트 1건뿐). **실제 Claude/fal.ai API 호출이나 로컬 Postgres를 통한 런타임 검증은 아직 하지 않았다** — §6의 동시성 수정과 달리 이번 기능은 정적 검증 단계에 머물러 있다.
+
+---
+
+## 8. Configuration — `src/main/resources/application.yml`
 
 > 저장소에는 여전히 `application.yml` 하나만 존재한다(`application-local.yml`/`application-prod.yml` 없음). 프로필 분기는 `@Profile("local")` / `@Profile("!local")` 또는 `@Profile("prod")` 어노테이션으로 Java 코드 레벨에서 처리되고, 기본 활성 프로필은 `spring.profiles.default: local`이다. 이전 스냅샷 대비 `spring.config.import`(`.env` 자동 로드), `spring.mail.*`, `app.cors.*`, `app.jwt.*`, `app.storage.access-key/secret-key`가 신규 추가되었다.
 >
@@ -2629,15 +2835,17 @@ app:
 
 | 영역 | 실제(prod) 어댑터 | Mock(local/default) 어댑터 |
 |---|---|---|
-| Claude(Anthropic Messages API) | `generation/infrastructure/client/claude/ClaudePromptGenerationAdapter.java` | `MockPromptGenerationAdapter.java` |
-| fal.ai(이미지/영상 큐) | `generation/infrastructure/client/fal/FalGenerationAdapter.java` | `MockFalGenerationAdapter.java` |
+| Claude(Anthropic Messages API, 무중력 프롬프트 보정) | `generation/infrastructure/client/claude/ClaudePromptGenerationAdapter.java` | `MockPromptGenerationAdapter.java` |
+| Claude(Anthropic Messages API, 캐릭터 시트 프롬프트 보정 — 신규 §7) | `generation/infrastructure/client/claude/ClaudeCharacterSheetPromptAdapter.java` | `MockCharacterSheetPromptAdapter.java` |
+| fal.ai(이미지/영상 큐, GPT Image 2 포함) | `generation/infrastructure/client/fal/FalGenerationAdapter.java` | `MockFalGenerationAdapter.java` |
 | OpenAI(GPT Vision 역프롬프트) | `generation/infrastructure/client/openai/GptVisionImageAnalysisAdapter.java` | `MockImageAnalysisAdapter.java` |
 | 스토리지(S3) | `media/infrastructure/storage/s3/S3MediaStorageAdapter.java` (`@Profile` 없음 — 항상 활성) | **없음** — 로컬도 실제(또는 MinIO 등 S3 호환) 스토리지 필요 |
 
 ---
 
-## 8. 관련 실무 문서 포인터 (Gemini가 추가 맥락이 필요할 때 참고)
+## 9. 관련 실무 문서 포인터 (Gemini가 추가 맥락이 필요할 때 참고)
 
+- 캐릭터 시트(Character Design Reference Sheet) 생성 모드 명세(FE/BE 역할, Claude System Prompt, 고정 템플릿 원문): `docs_h/charactersheet.md` — §7의 근거 문서
 - API 계약(생성 파이프라인 상세): `docs_h/API_명세서.md`
 - API 계약(빠른 참조): `docs_h/API_명세서_간략.md`
 - Postman 테스트 절차: `docs_h/postman.md`

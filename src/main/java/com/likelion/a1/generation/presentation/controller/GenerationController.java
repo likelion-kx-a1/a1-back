@@ -79,6 +79,9 @@ public class GenerationController {
             request.input(),
             request.sheetType(),
             request.sheetValue(),
+            request.generationMode(),
+            request.aiEnhance(),
+            request.characterSettings(),
             request.parentMessageId());
     return ApiResponse.success(Response.from(job));
   }

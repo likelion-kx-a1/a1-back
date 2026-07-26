@@ -1,12 +1,15 @@
 package com.likelion.a1.generation.application.service;
 
 import com.likelion.a1.generation.application.port.out.AiTextGenerationResult;
+import com.likelion.a1.generation.application.port.out.CharacterSheetPromptPort;
 import com.likelion.a1.generation.application.port.out.FalGenerationPort;
 import com.likelion.a1.generation.application.port.out.FalGenerationStatus;
 import com.likelion.a1.generation.application.port.out.FalGenerationSubmission;
 import com.likelion.a1.generation.application.port.out.ImageAnalysisPort;
 import com.likelion.a1.generation.application.port.out.PromptGenerationPort;
+import com.likelion.a1.generation.domain.model.CharacterSheetSettings;
 import com.likelion.a1.generation.domain.model.GenerationJob;
+import com.likelion.a1.generation.domain.model.GenerationMode;
 import com.likelion.a1.generation.domain.model.GenerationStatus;
 import com.likelion.a1.generation.domain.model.GenerationType;
 import com.likelion.a1.generation.domain.repository.GenerationJobRepository;
@@ -34,6 +37,7 @@ public class GenerationAiService {
   private final PromptGenerationPort promptGenerationPort;
   private final ImageAnalysisPort imageAnalysisPort;
   private final FalGenerationPort falGenerationPort;
+  private final CharacterSheetPromptPort characterSheetPromptPort;
   private final GeneratedMediaUploader generatedMediaUploader;
   private final GenerationResultService generationResultService;
 
@@ -42,12 +46,14 @@ public class GenerationAiService {
       PromptGenerationPort promptGenerationPort,
       ImageAnalysisPort imageAnalysisPort,
       FalGenerationPort falGenerationPort,
+      CharacterSheetPromptPort characterSheetPromptPort,
       GeneratedMediaUploader generatedMediaUploader,
       GenerationResultService generationResultService) {
     this.generationJobRepository = generationJobRepository;
     this.promptGenerationPort = promptGenerationPort;
     this.imageAnalysisPort = imageAnalysisPort;
     this.falGenerationPort = falGenerationPort;
+    this.characterSheetPromptPort = characterSheetPromptPort;
     this.generatedMediaUploader = generatedMediaUploader;
     this.generationResultService = generationResultService;
   }
@@ -150,8 +156,19 @@ public class GenerationAiService {
       Map<String, Object> input,
       String sheetType,
       String sheetValue,
+      String generationMode,
+      Boolean aiEnhance,
+      CharacterSheetSettings characterSettings,
       Long parentMessageId) {
     GenerationType type = parseGenerationType(jobType);
+
+    // 캐릭터 시트(Character Design Reference Sheet) 생성 모드는 시트 주입 엔진과 무관한 전용
+    // 파이프라인이라 sheetType/sheetValue는 무시하고 별도 분기로 처리한다(charactersheet.md 규격).
+    if (GenerationMode.fromRequest(generationMode) == GenerationMode.CHARACTER_SHEET) {
+      return submitCharacterSheetFalJob(
+          userId, chatId, type, modelCode, input, aiEnhance, characterSettings, parentMessageId);
+    }
+
     String originalPrompt = input.get("prompt") instanceof String promptText ? promptText : null;
 
     // 시트(Sheet) 주입 엔진: 시트 유형/생성 모드(이미지·비디오)에 따라 fal.ai로 보낼 최종 prompt를
@@ -201,6 +218,80 @@ public class GenerationAiService {
 
     // 실제 완료 처리(채팅 메시지/에셋 저장, isGenerating 해제)는 비동기 완료 시점
     // (getStatus 수동 폴링 또는 GenerationVideoPollingScheduler)에 GeneratedMediaUploader가 수행한다.
+    return generationJobRepository.save(job);
+  }
+
+  /**
+   * 캐릭터 시트(Character Design Reference Sheet) 생성 모드 전용 분기(charactersheet.md 규격).
+   * aiEnhance=true면 Claude Sonnet({@link CharacterSheetPromptPort})이 고정 레이아웃 폼으로 재구성한
+   * final_prompt_body를, false(또는 미지정)면 로컬 템플릿({@link CharacterSheetPromptTemplate#buildDirect})을
+   * 사용하고, 두 경우 모두 고정 Requirements 블록({@link CharacterSheetPromptTemplate#appendRequirements})을
+   * 덧붙인 뒤 fal.ai(GPT Image 2)로 제출한다. job.prompt에는 참조가 남도록 사용자의 core_description
+   * (원본)을 저장하고, 실제 결합된 최종 프롬프트는 responsePayload.finalPrompt에 기록한다
+   * (generateVideo의 refinedPrompt 기록 방식과 동일한 관례).
+   */
+  private GenerationJob submitCharacterSheetFalJob(
+      Long userId,
+      Long chatId,
+      GenerationType type,
+      String modelCode,
+      Map<String, Object> input,
+      Boolean aiEnhance,
+      CharacterSheetSettings characterSettings,
+      Long parentMessageId) {
+    String coreDescription = input.get("prompt") instanceof String promptText ? promptText : null;
+    boolean hasReferenceImages = input.get("images") instanceof List<?> images && !images.isEmpty();
+    CharacterSheetSettings settings = CharacterSheetSettings.orEmpty(characterSettings);
+    boolean shouldEnhance = Boolean.TRUE.equals(aiEnhance);
+
+    Map<String, Object> requestPayload = new LinkedHashMap<>();
+    requestPayload.put("modelCode", modelCode);
+    requestPayload.put("input", input);
+    requestPayload.put("generationMode", "character_sheet");
+    requestPayload.put("aiEnhance", shouldEnhance);
+    requestPayload.put("characterSettings", settings);
+
+    GenerationJob job =
+        generationJobRepository.save(
+            GenerationJob.create(
+                userId, chatId, null, parentMessageId, type.name(), coreDescription, requestPayload));
+    generationResultService.startGenerating(userId, chatId);
+
+    try {
+      long composeStartedAtMs = System.currentTimeMillis();
+      String promptBody =
+          shouldEnhance
+              ? characterSheetPromptPort
+                  .generateFinalPromptBody(coreDescription, settings, hasReferenceImages)
+                  .text()
+              : CharacterSheetPromptTemplate.buildDirect(coreDescription, settings, hasReferenceImages);
+      String finalPrompt = CharacterSheetPromptTemplate.appendRequirements(promptBody);
+      long composeDurationMs = System.currentTimeMillis() - composeStartedAtMs;
+
+      Map<String, Object> effectiveInput = new LinkedHashMap<>(input);
+      effectiveInput.put("prompt", finalPrompt);
+
+      long submitStartedAtMs = System.currentTimeMillis();
+      FalGenerationSubmission submission = falGenerationPort.submit(modelCode, effectiveInput);
+      long submissionLatencyMs = System.currentTimeMillis() - submitStartedAtMs;
+
+      Map<String, Object> responsePayload = new LinkedHashMap<>();
+      responsePayload.put("finalPrompt", finalPrompt);
+      responsePayload.put("requestId", submission.externalRequestId());
+      responsePayload.put("statusUrl", submission.statusUrl());
+      responsePayload.put("responseUrl", submission.responseUrl());
+      responsePayload.put("raw", submission.rawResponse());
+      PerformanceMetrics.record(responsePayload, "characterSheetPromptDurationMs", composeDurationMs);
+      PerformanceMetrics.record(responsePayload, "submissionLatencyMs", submissionLatencyMs);
+      PerformanceMetrics.announce(job.getId(), responsePayload);
+      job.markQueued(responsePayload);
+    } catch (RestClientResponseException exception) {
+      job.fail(exception.getMessage());
+      generationJobRepository.save(job);
+      safeFinishGenerating(userId, chatId);
+      throw exception;
+    }
+
     return generationJobRepository.save(job);
   }
 
