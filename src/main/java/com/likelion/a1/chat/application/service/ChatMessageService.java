@@ -188,7 +188,7 @@ public class ChatMessageService {
 
     if ("IMAGE".equals(generationType)
         && StringUtils.hasText(imageCategory)
-        && !List.of("CHARACTER", "BACKGROUND", "ETC").contains(imageCategory)) {
+        && !List.of("CHARACTER", "BACKGROUND", "ETC", "REVERSE_PROMPT").contains(imageCategory)) {
       throw new BusinessException(ErrorCode.INVALID_INPUT);
     }
 

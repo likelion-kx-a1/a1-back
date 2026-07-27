@@ -21,8 +21,8 @@ public final class ChatDtos {
       String generationType,
 
       @Pattern(
-          regexp = "CHARACTER|BACKGROUND|ETC",
-          message = "imageCategory는 CHARACTER, BACKGROUND, ETC만 가능합니다.")
+          regexp = "CHARACTER|BACKGROUND|ETC|REVERSE_PROMPT",
+          message = "imageCategory는 CHARACTER, BACKGROUND, ETC, REVERSE_PROMPT만 가능합니다.")
       String imageCategory) {}
 
   public record UpdateChatRequest(
@@ -70,8 +70,8 @@ public final class ChatDtos {
       String generationType,
 
       @Pattern(
-          regexp = "CHARACTER|BACKGROUND|ETC",
-          message = "imageCategory는 CHARACTER, BACKGROUND, ETC만 가능합니다.")
+          regexp = "CHARACTER|BACKGROUND|ETC|REVERSE_PROMPT",
+          message = "imageCategory는 CHARACTER, BACKGROUND, ETC, REVERSE_PROMPT만 가능합니다.")
       String imageCategory,
 
       Long parentMessageId,
