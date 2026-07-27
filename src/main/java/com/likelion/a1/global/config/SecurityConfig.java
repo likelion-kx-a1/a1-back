@@ -2,6 +2,7 @@ package com.likelion.a1.global.config;
 
 import com.likelion.a1.user.infrastructure.security.JwtAuthenticationFilter;
 import com.likelion.a1.user.infrastructure.security.JwtPrincipal;
+import jakarta.servlet.DispatcherType;
 import java.util.Arrays;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -41,7 +42,9 @@ public class SecurityConfig {
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
             auth ->
-                auth.requestMatchers(
+                auth.dispatcherTypeMatchers(DispatcherType.ASYNC)
+                    .permitAll()
+                    .requestMatchers(
                         "/actuator/health/**",
                         "/api/auth/check-login-id",
                         "/api/auth/email/send",
