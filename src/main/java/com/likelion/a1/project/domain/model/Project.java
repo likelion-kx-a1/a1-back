@@ -33,6 +33,8 @@ public class Project {
 
   private OffsetDateTime deletedAt;
 
+  private String coverImageUrl;
+
   public static Project create(Long userId, String name, String description) {
     Project project = new Project();
     OffsetDateTime now = OffsetDateTime.now();
@@ -50,6 +52,11 @@ public class Project {
   public void update(String name, String description) {
     this.name = name;
     this.description = description;
+    this.updatedAt = OffsetDateTime.now();
+  }
+
+  public void updateCoverImage(String coverImageUrl) {
+    this.coverImageUrl = coverImageUrl;
     this.updatedAt = OffsetDateTime.now();
   }
 

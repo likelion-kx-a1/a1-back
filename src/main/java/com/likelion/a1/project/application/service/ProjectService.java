@@ -5,15 +5,20 @@ import com.likelion.a1.chat.domain.repository.ChatRepository;
 import com.likelion.a1.global.exception.BusinessException;
 import com.likelion.a1.global.exception.ErrorCode;
 import com.likelion.a1.library.application.service.MyLibraryService;
+import com.likelion.a1.media.application.port.out.MediaStoragePort;
+import com.likelion.a1.media.application.port.out.StorageUploadCommand;
+import com.likelion.a1.media.application.port.out.StorageUploadResult;
 import com.likelion.a1.media.presentation.dto.MediaDtos.LibraryProjectContentsResponse;
 import com.likelion.a1.project.domain.model.Project;
 import com.likelion.a1.project.domain.repository.ProjectRepository;
 import com.likelion.a1.project.presentation.dto.ProjectDtos.CreateRequest;
 import com.likelion.a1.project.presentation.dto.ProjectDtos.Response;
 import com.likelion.a1.project.presentation.dto.ProjectDtos.UpdateRequest;
+import java.io.IOException;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @Transactional
@@ -21,14 +26,17 @@ public class ProjectService {
   private final ProjectRepository projectRepository;
   private final ChatRepository chatRepository;
   private final MyLibraryService myLibraryService;
+  private final MediaStoragePort mediaStoragePort;
 
   public ProjectService(
       ProjectRepository projectRepository,
       ChatRepository chatRepository,
-      MyLibraryService myLibraryService) {
+      MyLibraryService myLibraryService,
+      MediaStoragePort mediaStoragePort) {
     this.projectRepository = projectRepository;
     this.chatRepository = chatRepository;
     this.myLibraryService = myLibraryService;
+    this.mediaStoragePort = mediaStoragePort;
   }
 
   public Response create(Long userId, CreateRequest request) {
@@ -36,7 +44,12 @@ public class ProjectService {
     Project savedProject = projectRepository.save(project);
 
     Chat defaultChat =
-        Chat.create(userId, savedProject.getId(), savedProject.getName(), "IMAGE", null);
+        Chat.create(
+            userId,
+            savedProject.getId(),
+            savedProject.getName(),
+            normalizeGenerationType(request.generationType()),
+            null);
 
     Chat savedChat = chatRepository.save(defaultChat);
     Long libraryProjectId =
@@ -62,6 +75,38 @@ public class ProjectService {
     project.update(request.name().trim(), request.description());
 
     return toResponse(projectRepository.save(project));
+  }
+
+  public Response updateCoverImage(Long userId, Long projectId, MultipartFile file) {
+    Project project = findOwnedProject(userId, projectId);
+    if (file == null || file.isEmpty()) {
+      throw new BusinessException(ErrorCode.INVALID_INPUT);
+    }
+
+    StorageUploadResult result =
+        mediaStoragePort.upload(
+            new StorageUploadCommand(
+                readBytes(file),
+                file.getOriginalFilename(),
+                normalizeContentType(file.getContentType()),
+                null,
+                "users/" + userId + "/projects/" + projectId + "/cover"));
+
+    project.updateCoverImage(result.publicUrl());
+
+    return toResponse(projectRepository.save(project));
+  }
+
+  private byte[] readBytes(MultipartFile file) {
+    try {
+      return file.getBytes();
+    } catch (IOException exception) {
+      throw new BusinessException(ErrorCode.INVALID_INPUT);
+    }
+  }
+
+  private String normalizeContentType(String contentType) {
+    return contentType == null || contentType.isBlank() ? "application/octet-stream" : contentType.trim();
   }
 
   public void delete(Long userId, Long projectId) {
@@ -92,6 +137,14 @@ public class ProjectService {
       Long userId, Long projectId, Long folderId, String assetType, String keyword) {
     findOwnedProject(userId, projectId);
     return myLibraryService.getProjectLibraryContents(userId, projectId, folderId, assetType, keyword);
+  }
+
+  private String normalizeGenerationType(String generationType) {
+    if (generationType == null || generationType.isBlank()) {
+      return "IMAGE";
+    }
+
+    return generationType.trim().toUpperCase();
   }
 
   public Project findOwnedProject(Long userId, Long projectId) {
@@ -127,6 +180,7 @@ public class ProjectService {
         project.getStatus(),
         defaultChatId,
         libraryProjectId,
+        project.getCoverImageUrl(),
         project.getCreatedAt(),
         project.getUpdatedAt());
   }

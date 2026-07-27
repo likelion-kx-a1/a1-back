@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/projects")
@@ -78,6 +79,17 @@ public class ProjectController {
         "PROJECT_UPDATED",
         "프로젝트가 수정되었습니다.",
         projectService.update(principal.userId(), projectId, request));
+  }
+
+  @PostMapping("/{projectId}/cover")
+  public ApiResponse<Response> updateCoverImage(
+      @AuthenticationPrincipal JwtPrincipal principal,
+      @PathVariable Long projectId,
+      @RequestParam("file") MultipartFile file) {
+    return ApiResponse.success(
+        "PROJECT_COVER_UPDATED",
+        "프로젝트 표지 이미지가 수정되었습니다.",
+        projectService.updateCoverImage(principal.userId(), projectId, file));
   }
 
   @DeleteMapping("/{projectId}")
