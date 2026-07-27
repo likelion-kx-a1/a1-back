@@ -2,6 +2,8 @@ package com.likelion.a1.generation.presentation.dto;
 
 import com.likelion.a1.generation.domain.model.CharacterSheetSettings;
 import com.likelion.a1.generation.domain.model.GenerationJob;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -72,6 +74,8 @@ public final class GenerationJobDtos {
    * 자동 분기되므로, jobType이나 modelCode를 직접 지정할 필요가 없다(api_2.md 분기 엔진 규격).
    * refinePrompt는 Claude Sonnet 선행 보정 여부를 선택한다 — null이거나 생략되면 true(보정함)로 간주해
    * 기존 호출자와의 호환성을 지킨다.
+   * duration은 4~15초만 허용한다 — Kling O3 Standard(3~15초)와 Seedance 2.0(4~15초) 두 모델이
+   * 공통으로 지원하는 교집합 범위이며, 벗어나면 fal.ai가 거부한다. null/생략이면 fal.ai 기본값을 쓴다.
    */
   public record VideoGenerationRequest(
       @NotNull Long userId,
@@ -79,7 +83,7 @@ public final class GenerationJobDtos {
       boolean highQuality,
       List<String> images,
       @NotBlank String prompt,
-      Integer duration,
+      @Min(4) @Max(15) Integer duration,
       String aspectRatio,
       Boolean refinePrompt,
       Long parentMessageId) {}
