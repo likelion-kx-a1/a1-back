@@ -15,10 +15,13 @@ public class SseRepository {
 
   public SseEmitter register(Long userId) {
     SseEmitter emitter = new SseEmitter(TIMEOUT_MS);
-    emitters.put(userId, emitter);
-    emitter.onCompletion(() -> emitters.remove(userId));
-    emitter.onTimeout(() -> emitters.remove(userId));
-    emitter.onError(throwable -> emitters.remove(userId));
+    SseEmitter previousEmitter = emitters.put(userId, emitter);
+    emitter.onCompletion(() -> emitters.remove(userId, emitter));
+    emitter.onTimeout(() -> emitters.remove(userId, emitter));
+    emitter.onError(throwable -> emitters.remove(userId, emitter));
+    if (previousEmitter != null) {
+      previousEmitter.complete();
+    }
     return emitter;
   }
 
@@ -30,7 +33,7 @@ public class SseRepository {
     try {
       emitter.send(SseEmitter.event().name(eventName).data(data));
     } catch (IOException exception) {
-      emitters.remove(userId);
+      emitters.remove(userId, emitter);
       emitter.completeWithError(exception);
     }
   }
@@ -41,7 +44,7 @@ public class SseRepository {
           try {
             emitter.send(SseEmitter.event().comment("ping"));
           } catch (IOException exception) {
-            emitters.remove(userId);
+            emitters.remove(userId, emitter);
             emitter.completeWithError(exception);
           }
         });

@@ -37,4 +37,29 @@ public class Notification {
 
   @Column(nullable = false)
   private OffsetDateTime createdAt;
+
+  public static Notification create(
+      Long userId,
+      String notificationType,
+      String title,
+      String content,
+      String relatedType,
+      Long relatedId) {
+    Notification notification = new Notification();
+    notification.userId = userId;
+    notification.notificationType = notificationType;
+    notification.title = title;
+    notification.content = content;
+    notification.relatedType = relatedType;
+    notification.relatedId = relatedId;
+    notification.isRead = false;
+    notification.createdAt = OffsetDateTime.now();
+    return notification;
+  }
+
+  public void markAsRead() {
+    if (isRead) return;
+    isRead = true;
+    readAt = OffsetDateTime.now();
+  }
 }
