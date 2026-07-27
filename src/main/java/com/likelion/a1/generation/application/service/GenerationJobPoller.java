@@ -51,10 +51,12 @@ class GenerationJobPoller {
     if (!(modelCodeValue instanceof String modelCode) || !(externalRequestIdValue instanceof String externalRequestId)) {
       return;
     }
+    String statusUrl = stringValue(responsePayload.get("statusUrl"));
+    String responseUrl = stringValue(responsePayload.get("responseUrl"));
 
     FalGenerationStatus polled;
     try {
-      polled = falGenerationPort.poll(modelCode, externalRequestId);
+      polled = falGenerationPort.poll(modelCode, externalRequestId, statusUrl, responseUrl);
     } catch (RestClientException exception) {
       return;
     }
@@ -76,5 +78,9 @@ class GenerationJobPoller {
     // 호출자(GenerationVideoPollingScheduler)가 job 단위로 감싼 try/catch에서 로그만 남기고 다음
     // job으로 넘어간다. 다른 폴러가 이미 완료 처리했다는 뜻이므로 실질적 데이터 유실은 없다.
     generationJobRepository.save(job);
+  }
+
+  private String stringValue(Object value) {
+    return value instanceof String string && !string.isBlank() ? string : null;
   }
 }

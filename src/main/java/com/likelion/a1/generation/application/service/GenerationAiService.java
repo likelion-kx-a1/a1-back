@@ -409,7 +409,10 @@ public class GenerationAiService {
       return job;
     }
 
-    FalGenerationStatus polled = falGenerationPort.poll(modelCode, externalRequestId);
+    String statusUrl = stringValue(responsePayload.get("statusUrl"));
+    String responseUrl = stringValue(responsePayload.get("responseUrl"));
+    FalGenerationStatus polled =
+        falGenerationPort.poll(modelCode, externalRequestId, statusUrl, responseUrl);
     GenerationStatus newStatus = GenerationStatus.fromFalStatus(polled.status());
 
     Map<String, Object> merged = new LinkedHashMap<>(responsePayload);
@@ -429,6 +432,10 @@ public class GenerationAiService {
     // UnexpectedRollbackException으로 터진다(실측 확인됨). 그대로 던져 트랜잭션이 깨끗하게 롤백되게
     // 하고, 복구(재조회)는 트랜잭션 경계 밖인 GenerationController에서 한 번 재시도하는 방식으로 처리한다.
     return generationJobRepository.save(job);
+  }
+
+  private String stringValue(Object value) {
+    return value instanceof String string && !string.isBlank() ? string : null;
   }
 
   /**
