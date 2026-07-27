@@ -43,6 +43,15 @@ public class FileDownloadController {
             principal.userId(), chatId, generatedAssetId, fileId));
   }
 
+  @GetMapping("/api/library/assets/{savedAssetId}/files/{fileId}/download")
+  public ResponseEntity<Resource> downloadSavedAssetFile(
+      @AuthenticationPrincipal JwtPrincipal principal,
+      @PathVariable Long savedAssetId,
+      @PathVariable Long fileId) {
+    return toDownloadResponse(
+        fileDownloadService.downloadSavedAssetFile(principal.userId(), savedAssetId, fileId));
+  }
+
   private ResponseEntity<Resource> toDownloadResponse(DownloadFile file) {
     ByteArrayResource resource = new ByteArrayResource(file.content());
 

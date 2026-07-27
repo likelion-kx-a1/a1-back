@@ -11,8 +11,12 @@ import com.likelion.a1.media.application.port.out.MediaStoragePort;
 import com.likelion.a1.media.application.port.out.StorageDownloadResult;
 import com.likelion.a1.media.domain.model.AssetFile;
 import com.likelion.a1.media.domain.model.GeneratedAsset;
+import com.likelion.a1.media.domain.model.SavedAsset;
+import com.likelion.a1.media.domain.model.SavedAssetFile;
 import com.likelion.a1.media.domain.repository.AssetFileRepository;
 import com.likelion.a1.media.domain.repository.GeneratedAssetRepository;
+import com.likelion.a1.media.domain.repository.SavedAssetFileRepository;
+import com.likelion.a1.media.domain.repository.SavedAssetRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -25,6 +29,8 @@ public class FileDownloadService {
   private final ChatMessageFileRepository messageFileRepository;
   private final GeneratedAssetRepository generatedAssetRepository;
   private final AssetFileRepository assetFileRepository;
+  private final SavedAssetRepository savedAssetRepository;
+  private final SavedAssetFileRepository savedAssetFileRepository;
   private final MediaStoragePort mediaStoragePort;
 
   public FileDownloadService(
@@ -33,12 +39,16 @@ public class FileDownloadService {
       ChatMessageFileRepository messageFileRepository,
       GeneratedAssetRepository generatedAssetRepository,
       AssetFileRepository assetFileRepository,
+      SavedAssetRepository savedAssetRepository,
+      SavedAssetFileRepository savedAssetFileRepository,
       MediaStoragePort mediaStoragePort) {
     this.chatService = chatService;
     this.messageRepository = messageRepository;
     this.messageFileRepository = messageFileRepository;
     this.generatedAssetRepository = generatedAssetRepository;
     this.assetFileRepository = assetFileRepository;
+    this.savedAssetRepository = savedAssetRepository;
+    this.savedAssetFileRepository = savedAssetFileRepository;
     this.mediaStoragePort = mediaStoragePort;
   }
 
@@ -91,6 +101,32 @@ public class FileDownloadService {
     }
 
     StorageDownloadResult result = mediaStoragePort.download(file.getBucketName(), file.getStoragePath());
+
+    return new DownloadFile(
+        result.content(),
+        resolveContentType(result.contentType(), file.getMimeType()),
+        resolveFilename(file.getOriginalFilename(), file.getStoredFilename()),
+        resolveContentLength(result.contentLength(), file.getFileSize()));
+  }
+
+  public DownloadFile downloadSavedAssetFile(Long userId, Long savedAssetId, Long fileId) {
+    SavedAsset asset =
+        savedAssetRepository
+            .findById(savedAssetId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.ASSET_FILE_NOT_FOUND));
+
+    if (asset.isDeleted() || !asset.isOwnedBy(userId)) {
+      throw new BusinessException(ErrorCode.ASSET_FILE_NOT_FOUND);
+    }
+
+    SavedAssetFile file =
+        savedAssetFileRepository.findBySavedAssetId(savedAssetId).stream()
+            .filter(candidate -> candidate.getId().equals(fileId))
+            .findFirst()
+            .orElseThrow(() -> new BusinessException(ErrorCode.ASSET_FILE_NOT_FOUND));
+
+    StorageDownloadResult result =
+        mediaStoragePort.download(file.getBucketName(), file.getStoragePath());
 
     return new DownloadFile(
         result.content(),
