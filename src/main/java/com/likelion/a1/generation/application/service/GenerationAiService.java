@@ -390,8 +390,9 @@ public class GenerationAiService {
     return generationJobRepository.save(job);
   }
 
-  public GenerationJob getStatus(Long jobId) {
+  public GenerationJob getStatus(Long jobId, Long userId) {
     GenerationJob job = findJob(jobId);
+    verifyOwnership(job, userId);
     if (isTerminal(job.getStatus())) {
       return job;
     }
@@ -445,6 +446,18 @@ public class GenerationAiService {
     return generationJobRepository
         .findById(jobId)
         .orElseThrow(() -> new BusinessException(ErrorCode.GENERATION_NOT_FOUND));
+  }
+
+  /**
+   * job 상태 조회는 경로 변수(jobId)만으로 호출되므로, 요청 바디의 userId와 principal을 비교하는
+   * {@code GenerationController.verifyOwnership}과 달리 여기서는 job에 실제로 저장된 소유자와
+   * 인증된 principal을 비교한다(docs_h/보안_취약점_점검.md #2 — IDOR 방지).
+   */
+  private void verifyOwnership(GenerationJob job, Long userId) {
+    if (!job.getUserId().equals(userId)) {
+      throw new BusinessException(
+          ErrorCode.INVALID_INPUT, List.of("요청한 사용자가 이 생성 작업의 소유자가 아닙니다."));
+    }
   }
 
   private GenerationType parseGenerationType(String jobType) {

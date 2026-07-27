@@ -105,8 +105,9 @@ public class GenerationController {
   }
 
   @GetMapping("/fal-jobs/{jobId}/status")
-  public ApiResponse<Response> getFalJobStatus(@PathVariable Long jobId) {
-    GenerationJob job = getStatusWithConflictRetry(jobId);
+  public ApiResponse<Response> getFalJobStatus(
+      @AuthenticationPrincipal JwtPrincipal principal, @PathVariable Long jobId) {
+    GenerationJob job = getStatusWithConflictRetry(jobId, requireUserId(principal));
     return ApiResponse.success(Response.from(job));
   }
 
@@ -117,13 +118,26 @@ public class GenerationController {
    * 후 확인함). 트랜잭션 경계 밖인 여기서 한 번 더 호출하면, 완전히 새 트랜잭션으로 그 사이 다른 폴러가
    * 커밋해 둔 최신 상태(대개 이미 종결 상태)를 깨끗하게 다시 읽어온다.
    */
-  private GenerationJob getStatusWithConflictRetry(Long jobId) {
+  private GenerationJob getStatusWithConflictRetry(Long jobId, Long userId) {
     try {
-      return generationAiService.getStatus(jobId);
+      return generationAiService.getStatus(jobId, userId);
     } catch (OptimisticLockingFailureException exception) {
       log.info("Job {} 동시 완료 처리 충돌 감지 — 새 트랜잭션으로 한 번 더 조회합니다.", jobId);
-      return generationAiService.getStatus(jobId);
+      return generationAiService.getStatus(jobId, userId);
     }
+  }
+
+  /**
+   * 경로 변수만 있는 상태 조회 엔드포인트는 요청 바디가 없어 verifyOwnership처럼 비교할 대상 userId가
+   * 없으므로, principal 자체가 없으면(=인증 실패) 여기서 걸러낸다. 실제 job 소유자 비교는
+   * GenerationAiService.getStatus 내부에서 수행한다(docs_h/보안_취약점_점검.md #2).
+   */
+  private Long requireUserId(JwtPrincipal principal) {
+    if (principal == null || principal.userId() == null) {
+      throw new BusinessException(
+          ErrorCode.INVALID_INPUT, List.of("인증된 사용자 정보가 없습니다."));
+    }
+    return principal.userId();
   }
 
   /**
