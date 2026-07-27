@@ -425,7 +425,7 @@ public class GenerationAiService {
       return findJob(jobId);
     }
 
-    job.applyPolledStatus(newStatus, merged);
+    job.applyPolledStatus(newStatus, merged, stringValue(polled.rawResponse().get("errorMessage")));
     // 그래도 남는 좁은 race window(위 체크 이후 저장 사이)에서 OptimisticLockingFailureException이
     // 나면 여기서 잡지 않는다: Hibernate가 버전 충돌이 나는 순간 이 트랜잭션을 이미 rollback-only로
     // 표시하기 때문에, 이 메서드 안에서 잡아서 "복구"를 시도해도 메서드가 정상 반환된 뒤 커밋 시점에
