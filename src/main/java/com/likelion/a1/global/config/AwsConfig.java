@@ -13,6 +13,8 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
 import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner.Builder;
 
 @Configuration
 public class AwsConfig {
@@ -29,6 +31,24 @@ public class AwsConfig {
             .credentialsProvider(credentialsProvider(accessKey, secretKey))
             .serviceConfiguration(
                 S3Configuration.builder().pathStyleAccessEnabled(pathStyleAccess).build());
+
+    if (StringUtils.hasText(endpoint)) {
+      builder.endpointOverride(URI.create(endpoint));
+    }
+
+    return builder.build();
+  }
+
+  @Bean
+  S3Presigner s3Presigner(
+      @Value("${app.storage.region}") String region,
+      @Value("${app.storage.endpoint:}") String endpoint,
+      @Value("${app.storage.access-key:}") String accessKey,
+      @Value("${app.storage.secret-key:}") String secretKey) {
+    Builder builder =
+        S3Presigner.builder()
+            .region(Region.of(region))
+            .credentialsProvider(credentialsProvider(accessKey, secretKey));
 
     if (StringUtils.hasText(endpoint)) {
       builder.endpointOverride(URI.create(endpoint));
