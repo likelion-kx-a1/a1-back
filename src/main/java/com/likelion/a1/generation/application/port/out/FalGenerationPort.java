@@ -9,5 +9,9 @@ import java.util.Map;
 public interface FalGenerationPort {
   FalGenerationSubmission submit(String modelCode, Map<String, Object> input);
 
-  FalGenerationStatus poll(String modelCode, String externalRequestId);
+  FalGenerationStatus poll(
+      String modelCode,
+      String externalRequestId,
+      String statusUrl,
+      String responseUrl);
 }

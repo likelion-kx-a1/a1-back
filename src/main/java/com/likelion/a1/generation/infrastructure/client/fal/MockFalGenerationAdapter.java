@@ -43,7 +43,11 @@ public class MockFalGenerationAdapter implements FalGenerationPort {
   }
 
   @Override
-  public FalGenerationStatus poll(String modelCode, String externalRequestId) {
+  public FalGenerationStatus poll(
+      String modelCode,
+      String externalRequestId,
+      String statusUrl,
+      String responseUrl) {
     int attempt = pollCountByRequestId.merge(externalRequestId, 1, Integer::sum);
 
     Map<String, Object> raw = new LinkedHashMap<>();

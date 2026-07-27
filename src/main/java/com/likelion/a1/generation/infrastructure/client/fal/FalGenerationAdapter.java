@@ -55,18 +55,30 @@ public class FalGenerationAdapter implements FalGenerationPort {
   }
 
   @Override
-  public FalGenerationStatus poll(String modelCode, String externalRequestId) {
-    String statusUrl = baseUrl + "/" + modelCode + "/requests/" + externalRequestId + "/status";
+  public FalGenerationStatus poll(
+      String modelCode,
+      String externalRequestId,
+      String statusUrl,
+      String responseUrl) {
+    String resolvedStatusUrl = resolveUrl(statusUrl, modelCode, externalRequestId, "/status");
     ResponseEntity<String> statusResponse =
-        restTemplate.exchange(statusUrl, HttpMethod.GET, new HttpEntity<>(buildHeaders()), String.class);
+        restTemplate.exchange(
+            resolvedStatusUrl,
+            HttpMethod.GET,
+            new HttpEntity<>(buildHeaders()),
+            String.class);
 
     Map<String, Object> raw = new LinkedHashMap<>(parseJson(statusResponse.getBody()));
     String status = String.valueOf(raw.get("status"));
 
     if ("COMPLETED".equals(status)) {
-      String responseUrl = baseUrl + "/" + modelCode + "/requests/" + externalRequestId;
+      String resolvedResponseUrl = resolveUrl(responseUrl, modelCode, externalRequestId, "");
       ResponseEntity<String> resultResponse =
-          restTemplate.exchange(responseUrl, HttpMethod.GET, new HttpEntity<>(buildHeaders()), String.class);
+          restTemplate.exchange(
+              resolvedResponseUrl,
+              HttpMethod.GET,
+              new HttpEntity<>(buildHeaders()),
+              String.class);
       raw.putAll(parseJson(resultResponse.getBody()));
     }
 
