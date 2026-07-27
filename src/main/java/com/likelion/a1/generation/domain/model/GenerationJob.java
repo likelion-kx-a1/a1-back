@@ -100,6 +100,11 @@ public class GenerationJob {
     applyStatus(status, responsePayload, null);
   }
 
+  public void applyPolledStatus(
+      GenerationStatus status, Map<String, Object> responsePayload, String errorMessage) {
+    applyStatus(status, responsePayload, errorMessage);
+  }
+
   private void applyStatus(GenerationStatus status, Map<String, Object> responsePayload, String errorMessage) {
     this.status = status.name();
     this.responsePayload = responsePayload;

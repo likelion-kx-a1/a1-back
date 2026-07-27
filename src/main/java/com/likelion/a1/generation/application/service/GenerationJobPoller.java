@@ -72,7 +72,7 @@ class GenerationJobPoller {
       return;
     }
 
-    job.applyPolledStatus(newStatus, merged);
+    job.applyPolledStatus(newStatus, merged, errorMessage(polled));
     // 그래도 남는 좁은 race window(위 체크 이후 저장 사이)에서 충돌이 나면 이 메서드 밖
     // (REQUIRES_NEW 트랜잭션 경계)으로 그대로 던진다 — 이 job의 독립 트랜잭션만 깨끗하게 롤백되고,
     // 호출자(GenerationVideoPollingScheduler)가 job 단위로 감싼 try/catch에서 로그만 남기고 다음
@@ -82,5 +82,9 @@ class GenerationJobPoller {
 
   private String stringValue(Object value) {
     return value instanceof String string && !string.isBlank() ? string : null;
+  }
+
+  private String errorMessage(FalGenerationStatus status) {
+    return stringValue(status.rawResponse().get("errorMessage"));
   }
 }
