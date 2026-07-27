@@ -34,5 +34,10 @@ public class AuthSessionRepositoryAdapter implements AuthSessionRepository {
         repository.findAllByUserIdAndStatus(userId, "ACTIVE")
                 .forEach(AuthSession::revoke);
     }
-    
+
+    @Override
+    public void revokeAllByUserIdExceptSessionId(Long userId, String exceptSessionId) {
+        repository.findAllByUserIdAndStatusAndSessionIdNot(userId, "ACTIVE", exceptSessionId)
+                .forEach(AuthSession::revoke);
+    }
 }
