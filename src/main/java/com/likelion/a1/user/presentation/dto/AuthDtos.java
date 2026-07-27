@@ -1,5 +1,6 @@
 package com.likelion.a1.user.presentation.dto;
 
+import com.likelion.a1.user.domain.model.User;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -74,5 +75,46 @@ public final class AuthDtos {
   public record PasswordResetRequest(
       @Email @NotBlank String email,
       @NotBlank String verificationCode,
+      @NotBlank @Size(min = 8, max = 100) String newPassword) {}
+
+  /** 로그인한 사용자 자신의 프로필 조회(`GET /api/auth/me`) 응답. 관리자 전용 필드(승인자/거절 사유 등)는 제외한다. */
+  public record MeResponse(
+      Long id,
+      String loginId,
+      String email,
+      String name,
+      LocalDate birthDate,
+      String phoneNumber,
+      String profileImageUrl,
+      String role,
+      String accountStatus,
+      String approvalStatus,
+      int loginCount,
+      OffsetDateTime lastLoginAt,
+      OffsetDateTime createdAt) {
+    public static MeResponse from(User user) {
+      return new MeResponse(
+          user.getId(),
+          user.getLoginId(),
+          user.getEmail(),
+          user.getName(),
+          user.getBirthDate(),
+          user.getPhoneNumber(),
+          user.getProfileImageUrl(),
+          user.getRole(),
+          user.getAccountStatus(),
+          user.getApprovalStatus(),
+          user.getLoginCount(),
+          user.getLastLoginAt(),
+          user.getCreatedAt());
+    }
+  }
+
+  /**
+   * 로그인 상태에서의 비밀번호 변경(`POST /api/auth/password/change`) 요청 — 미인증 forgot-password
+   * 흐름(`PasswordResetRequest`)과 달리 이메일 인증 코드 대신 현재 비밀번호로 본인 확인을 한다.
+   */
+  public record ChangePasswordRequest(
+      @NotBlank String currentPassword,
       @NotBlank @Size(min = 8, max = 100) String newPassword) {}
 }

@@ -230,6 +230,39 @@ public class AuthService {
     user.recordLogout();
   }
 
+  /** 로그인한 사용자 자신의 프로필 조회(`GET /api/auth/me`). */
+  @Transactional(readOnly = true)
+  public MeResponse getMe(Long userId) {
+    User user =
+        userRepository.findById(userId).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+    return MeResponse.from(user);
+  }
+
+  /**
+   * 로그인 상태에서의 비밀번호 변경. 이메일 인증코드 대신 현재 비밀번호로 본인 확인을 한다(§9). 변경
+   * 즉시 다른 기기의 세션은 전부 강제 종료하되(탈취된 세션이 있었다면 이 시점에 끊긴다), 방금 본인이
+   * 비밀번호로 확인된 현재 세션만은 살려둔다 — 비밀번호를 바꾸자마자 자기 자신도 로그아웃되는 것을 막는다.
+   */
+  @Transactional
+  public void changePassword(
+      Long userId, String currentSessionId, String currentPassword, String newPassword) {
+    User user =
+        userRepository.findById(userId).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+    if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+      throw new BusinessException(ErrorCode.PASSWORD_NOT_MATCH);
+    }
+
+    user.changePassword(passwordEncoder.encode(newPassword));
+    authSessionRepository.revokeAllByUserIdExceptSessionId(userId, currentSessionId);
+  }
+
+  /** 전체 기기 로그아웃(§10) — 지금 이 요청을 보낸 세션을 포함해 그 사용자의 모든 세션을 강제 종료한다. */
+  @Transactional
+  public void logoutAll(Long userId) {
+    authSessionRepository.revokeAllByUserId(userId);
+  }
+
   /** 실패 횟수가 임계치에 도달하는 바로 그 순간에만 잠금을 건다(그 이후는 isLocked에서 먼저 걸러짐). */
   private void recordLoginFailure(String loginId) {
     long failures = rateLimiter.increment(loginFailureKey(loginId), LOGIN_FAILURE_WINDOW);

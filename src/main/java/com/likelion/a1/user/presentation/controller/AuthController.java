@@ -5,6 +5,7 @@ import com.likelion.a1.user.application.service.AuthService;
 import com.likelion.a1.user.application.service.EmailVerificationService;
 import com.likelion.a1.user.application.service.PasswordResetService;
 import com.likelion.a1.user.infrastructure.security.JwtPrincipal;
+import com.likelion.a1.user.presentation.dto.AuthDtos.ChangePasswordRequest;
 import com.likelion.a1.user.presentation.dto.AuthDtos.EmailSendRequest;
 import com.likelion.a1.user.presentation.dto.AuthDtos.EmailSendResponse;
 import com.likelion.a1.user.presentation.dto.AuthDtos.EmailVerifyRequest;
@@ -13,6 +14,7 @@ import com.likelion.a1.user.presentation.dto.AuthDtos.LoginIdCheckResponse;
 import com.likelion.a1.user.presentation.dto.AuthDtos.LoginRequest;
 import com.likelion.a1.user.presentation.dto.AuthDtos.LoginResponse;
 import com.likelion.a1.user.presentation.dto.AuthDtos.LogoutRequest;
+import com.likelion.a1.user.presentation.dto.AuthDtos.MeResponse;
 import com.likelion.a1.user.presentation.dto.AuthDtos.PasswordResetRequest;
 import com.likelion.a1.user.presentation.dto.AuthDtos.SignupRequest;
 import com.likelion.a1.user.presentation.dto.AuthDtos.SignupResponse;
@@ -105,5 +107,24 @@ public class AuthController {
   public ApiResponse<Void> resetPassword(@Valid @RequestBody PasswordResetRequest request) {
     passwordResetService.reset(request);
     return ApiResponse.success("PASSWORD_RESET_SUCCESS", "비밀번호가 재설정되었습니다.", null);
+  }
+
+  @GetMapping("/me")
+  public ApiResponse<MeResponse> me(@AuthenticationPrincipal JwtPrincipal principal) {
+    return ApiResponse.success("ME_FETCHED", "내 정보를 조회했습니다.", authService.getMe(principal.userId()));
+  }
+
+  @PostMapping("/password/change")
+  public ApiResponse<Void> changePassword(
+      @AuthenticationPrincipal JwtPrincipal principal, @Valid @RequestBody ChangePasswordRequest request) {
+    authService.changePassword(
+        principal.userId(), principal.sessionId(), request.currentPassword(), request.newPassword());
+    return ApiResponse.success("PASSWORD_CHANGED", "비밀번호가 변경되었습니다.", null);
+  }
+
+  @PostMapping("/logout-all")
+  public ApiResponse<Void> logoutAll(@AuthenticationPrincipal JwtPrincipal principal) {
+    authService.logoutAll(principal.userId());
+    return ApiResponse.success("LOGOUT_ALL_SUCCESS", "모든 기기에서 로그아웃되었습니다.", null);
   }
 }
