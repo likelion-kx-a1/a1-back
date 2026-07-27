@@ -57,8 +57,15 @@ public final class AuthDtos {
 
   public record TokenRefreshRequest(@NotBlank String refreshToken) {}
 
+  /**
+   * refreshToken은 rotate-on-use 정책(2026-07-27 도입)에 따라 매 호출마다 새로 발급된다 — 클라이언트는
+   * 이 응답의 refreshToken으로 이전에 갖고 있던 값을 반드시 교체 저장해야 하며, 다음 재발급 요청에는
+   * 새 값을 사용해야 한다. 이미 교체되어 폐기된(rotate-out) refreshToken을 다시 사용하면 재사용 공격으로
+   * 간주되어 해당 사용자의 모든 세션이 강제 종료된다.
+   */
   public record TokenRefreshResponse(
       String accessToken,
+      String refreshToken,
       String tokenType,
       long expiresIn) {}
 

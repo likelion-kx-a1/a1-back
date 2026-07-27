@@ -51,9 +51,12 @@ public class AuthController {
   }
 
   @PostMapping("/email/send")
-  public ApiResponse<EmailSendResponse> sendEmail(@Valid @RequestBody EmailSendRequest request) {
+  public ApiResponse<EmailSendResponse> sendEmail(
+      @Valid @RequestBody EmailSendRequest request, HttpServletRequest servletRequest) {
     return ApiResponse.success(
-        "EMAIL_SENT", "인증번호가 발송되었습니다.", emailVerificationService.send(request));
+        "EMAIL_SENT",
+        "인증번호가 발송되었습니다.",
+        emailVerificationService.send(request, servletRequest.getRemoteAddr()));
   }
 
   @PostMapping("/email/verify")
@@ -83,9 +86,12 @@ public class AuthController {
 
   @PostMapping("/refresh")
   public ApiResponse<TokenRefreshResponse> refresh(
-      @Valid @RequestBody TokenRefreshRequest request) {
+      @Valid @RequestBody TokenRefreshRequest request, HttpServletRequest servletRequest) {
     return ApiResponse.success(
-        "TOKEN_REFRESHED", "토큰이 재발급되었습니다.", authService.refresh(request));
+        "TOKEN_REFRESHED",
+        "토큰이 재발급되었습니다.",
+        authService.refresh(
+            request, servletRequest.getRemoteAddr(), servletRequest.getHeader("User-Agent")));
   }
 
   @PostMapping("/logout")
