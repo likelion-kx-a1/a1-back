@@ -49,8 +49,7 @@ public class SecurityConfig {
                         "/api/auth/signup",
                         "/api/auth/login",
                         "/api/auth/refresh",
-                        "/api/auth/password/reset",
-                        "/api/v1/sse/**")
+                        "/api/auth/password/reset")
                     .permitAll()
                     .requestMatchers("/api/admin/**")
                     .access(

@@ -4,6 +4,7 @@ import com.likelion.a1.global.exception.BusinessException;
 import com.likelion.a1.global.exception.ErrorCode;
 import com.likelion.a1.user.application.port.out.EmailSenderPort;
 import com.likelion.a1.user.domain.model.User;
+import com.likelion.a1.user.domain.repository.AuthSessionRepository;
 import com.likelion.a1.user.domain.repository.UserRepository;
 import com.likelion.a1.user.presentation.dto.AdminUserDtos.PageResponse;
 import com.likelion.a1.user.presentation.dto.AdminUserDtos.UserDetailResponse;
@@ -28,10 +29,15 @@ public class AdminUserService {
 
   private final UserRepository userRepository;
   private final EmailSenderPort emailSenderPort;
+  private final AuthSessionRepository authSessionRepository;
 
-  public AdminUserService(UserRepository userRepository, EmailSenderPort emailSenderPort) {
+  public AdminUserService(
+      UserRepository userRepository,
+      EmailSenderPort emailSenderPort,
+      AuthSessionRepository authSessionRepository) {
     this.userRepository = userRepository;
     this.emailSenderPort = emailSenderPort;
+    this.authSessionRepository = authSessionRepository;
   }
 
   @Transactional(readOnly = true)
@@ -94,8 +100,15 @@ public class AdminUserService {
 
     User user = findActiveUser(userId);
     user.changeAccountStatus(normalizedAccountStatus);
+    UserDetailResponse response = toDetail(userRepository.save(user));
 
-    return toDetail(userRepository.save(user));
+    if (!"ACTIVE".equals(normalizedAccountStatus)) {
+      // 계정 비활성화는 즉시 반영돼야 한다 — 세션을 revoke해두면 JwtAuthenticationFilter가 다음
+      // 요청부터 이 사용자의 access token을 전부 거부한다(docs_h/보안_취약점_점검.md #4).
+      authSessionRepository.revokeAllByUserId(userId);
+    }
+
+    return response;
   }
 
   public void deleteUser(Long userId, Long adminUserId) {
@@ -104,6 +117,8 @@ public class AdminUserService {
     User user = findActiveUser(userId);
     user.delete();
     userRepository.save(user);
+    // 삭제된 계정은 무조건 즉시 접근이 끊겨야 한다(docs_h/보안_취약점_점검.md #4).
+    authSessionRepository.revokeAllByUserId(userId);
   }
 
   private User findActiveUser(Long userId) {

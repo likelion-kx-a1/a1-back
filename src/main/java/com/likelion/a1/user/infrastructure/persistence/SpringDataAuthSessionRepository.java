@@ -12,4 +12,7 @@ interface SpringDataAuthSessionRepository extends JpaRepository<AuthSession, Lon
   Optional<AuthSession> findByRefreshTokenHash(String refreshTokenHash);
 
   List<AuthSession> findAllByUserIdAndStatus(Long userId, String status);
+
+  List<AuthSession> findAllByUserIdAndStatusAndSessionIdNot(
+      Long userId, String status, String sessionId);
 }

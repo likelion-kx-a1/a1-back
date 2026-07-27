@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 public enum ErrorCode {
   // 공통 에러 코드
   INVALID_INPUT(HttpStatus.BAD_REQUEST, "COMMON-001", "입력값이 올바르지 않습니다."),
+  TOO_MANY_REQUESTS(HttpStatus.TOO_MANY_REQUESTS, "COMMON-002", "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."),
   USER_EMAIL_DUPLICATE(HttpStatus.CONFLICT, "USER-001", "이미 사용 중인 이메일입니다."),
   USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER-002", "존재하지 않는 사용자입니다."),
   CHAT_NOT_FOUND(HttpStatus.NOT_FOUND, "CHAT-001", "존재하지 않는 채팅방입니다."),
@@ -18,6 +19,7 @@ public enum ErrorCode {
   SIGNUP_PENDING(HttpStatus.FORBIDDEN, "SIGNUP_PENDING", "관리자 승인 후 이용 가능합니다."),
   SIGNUP_REJECTED(HttpStatus.FORBIDDEN, "SIGNUP_REJECTED", "회원가입 신청이 거절되었습니다."),
   ACCOUNT_INACTIVE(HttpStatus.FORBIDDEN, "ACCOUNT_INACTIVE", "계정 상태가 비활성화입니다."),
+  ACCOUNT_LOCKED(HttpStatus.FORBIDDEN, "ACCOUNT_LOCKED", "로그인 실패 횟수를 초과하여 계정이 일시적으로 잠겼습니다. 잠시 후 다시 시도해주세요."),
   // JWT 관련 에러 코드
   INVALID_ACCESS_TOKEN(HttpStatus.UNAUTHORIZED, "INVALID_ACCESS_TOKEN", "유효하지 않은 Access Token입니다."),
   INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "INVALID_REFRESH_TOKEN", "유효하지 않은 Refresh Token입니다."),

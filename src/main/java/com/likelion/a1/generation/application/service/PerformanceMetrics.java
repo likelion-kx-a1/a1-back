@@ -37,6 +37,7 @@ final class PerformanceMetrics {
     StringBuilder line = new StringBuilder("🪐 [성능 지표] Job ID: ").append(jobId);
     appendIfPresent(line, performance, "refineDurationMs", "Claude 보정", "ms");
     appendIfPresent(line, performance, "analysisDurationMs", "GPT Vision 역분석", "ms");
+    appendIfPresent(line, performance, "characterSheetPromptDurationMs", "캐릭터 시트 프롬프트 구성", "ms");
     appendIfPresent(line, performance, "submissionLatencyMs", "fal.ai 제출 지연", "ms");
     appendIfPresent(line, performance, "asyncPollingDurationSec", "총 비동기 완공 시간", "초");
     log.info(line.toString());

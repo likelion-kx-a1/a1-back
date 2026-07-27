@@ -65,18 +65,6 @@ public class User {
 
   private OffsetDateTime deletedAt;
 
-  private User(String email, String passwordHash, String name) {
-    this.loginId = email.trim().toLowerCase();
-    this.email = email.trim().toLowerCase();
-    this.passwordHash = passwordHash;
-    this.name = name;
-    this.createdAt = OffsetDateTime.now();
-    this.updatedAt = this.createdAt;
-  }
-
-  public static User local(String email, String passwordHash, String name) {
-    return new User(email, passwordHash, name);
-  }
   public static User signup(
     String loginId, 
     String email, 
