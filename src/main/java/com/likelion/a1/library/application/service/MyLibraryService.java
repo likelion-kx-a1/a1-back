@@ -8,6 +8,8 @@ import com.likelion.a1.chat.domain.repository.ChatMessageRepository;
 import com.likelion.a1.chat.domain.repository.ChatRepository;
 import com.likelion.a1.global.exception.BusinessException;
 import com.likelion.a1.global.exception.ErrorCode;
+import com.likelion.a1.generation.domain.model.GenerationJob;
+import com.likelion.a1.generation.domain.repository.GenerationJobRepository;
 import com.likelion.a1.media.application.port.out.MediaStoragePort;
 import com.likelion.a1.media.application.port.out.StorageDownloadResult;
 import com.likelion.a1.media.application.port.out.StorageUploadCommand;
@@ -27,6 +29,7 @@ import com.likelion.a1.media.domain.repository.StorageFolderRepository;
 import com.likelion.a1.media.presentation.dto.MediaDtos.CreateStorageFolderRequest;
 import com.likelion.a1.media.presentation.dto.MediaDtos.CreateLibraryProjectRequest;
 import com.likelion.a1.media.presentation.dto.MediaDtos.LibraryAssetResponse;
+import com.likelion.a1.media.presentation.dto.MediaDtos.LibraryGenerationMetadataResponse;
 import com.likelion.a1.media.presentation.dto.MediaDtos.LibraryProjectContentsResponse;
 import com.likelion.a1.media.presentation.dto.MediaDtos.LibraryProjectResponse;
 import com.likelion.a1.media.presentation.dto.MediaDtos.LibraryProjectSummaryResponse;
@@ -65,6 +68,7 @@ public class MyLibraryService {
   private final ChatRepository chatRepository;
   private final ChatMessageRepository chatMessageRepository;
   private final ChatMessageFileRepository chatMessageFileRepository;
+  private final GenerationJobRepository generationJobRepository;
 
   public MyLibraryService(
       LibraryProjectRepository libraryProjectRepository,
@@ -76,7 +80,8 @@ public class MyLibraryService {
       MediaStoragePort mediaStoragePort,
       ChatRepository chatRepository,
       ChatMessageRepository chatMessageRepository,
-      ChatMessageFileRepository chatMessageFileRepository) {
+      ChatMessageFileRepository chatMessageFileRepository,
+      GenerationJobRepository generationJobRepository) {
     this.libraryProjectRepository = libraryProjectRepository;
     this.savedAssetRepository = savedAssetRepository;
     this.storageFolderRepository = storageFolderRepository;
@@ -87,6 +92,7 @@ public class MyLibraryService {
     this.chatRepository = chatRepository;
     this.chatMessageRepository = chatMessageRepository;
     this.chatMessageFileRepository = chatMessageFileRepository;
+    this.generationJobRepository = generationJobRepository;
   }
 
   public LibraryProjectResponse createLibraryProject(
@@ -380,7 +386,13 @@ public class MyLibraryService {
   public SavedAssetResponse updateSavedAsset(
       Long userId, Long savedAssetId, UpdateSavedAssetRequest request) {
     SavedAsset savedAsset = findOwnedSavedAsset(userId, savedAssetId);
-    savedAsset.updateDisplayName(normalizeRequired(request.displayName()));
+    if (StringUtils.hasText(request.displayName())) {
+      savedAsset.updateDisplayName(request.displayName().trim());
+    }
+    if (request.folderId() != null) {
+      findOwnedFolder(userId, savedAsset.getLibraryProjectId(), request.folderId());
+      savedAsset.moveToFolder(request.folderId());
+    }
 
     return toSavedAssetResponse(
         savedAssetRepository.save(savedAsset),
@@ -690,6 +702,16 @@ public class MyLibraryService {
 
   private SavedAssetResponse toSavedAssetResponse(
       SavedAsset savedAsset, List<SavedAssetFile> files) {
+    GeneratedAsset sourceGeneratedAsset = findSourceGeneratedAsset(savedAsset);
+    GenerationJob generationJob = findGenerationJob(sourceGeneratedAsset);
+    Chat sourceChat = findSourceChat(sourceGeneratedAsset);
+    if (sourceChat == null) {
+      sourceChat = findSourceChat(savedAsset);
+    }
+    ChatMessage sourceMessage = findSourceMessage(savedAsset, sourceGeneratedAsset, generationJob);
+    LibraryProject libraryProject =
+        libraryProjectRepository.findById(savedAsset.getLibraryProjectId()).orElse(null);
+
     return new SavedAssetResponse(
         savedAsset.getId(),
         savedAsset.getUserId(),
@@ -703,6 +725,11 @@ public class MyLibraryService {
         savedAsset.getDisplayName(),
         savedAsset.getAssetType(),
         savedAsset.getStatus(),
+        libraryProject == null ? null : toLibraryProjectSummaryResponse(libraryProject),
+        toLibrarySourceChatResponse(sourceChat),
+        toLibrarySourceMessageResponse(sourceMessage),
+        toLibrarySourceGeneratedAssetResponse(sourceGeneratedAsset),
+        toLibraryGenerationMetadataResponse(generationJob, sourceGeneratedAsset, sourceMessage),
         files.stream().map(this::toSavedAssetFileResponse).toList(),
         savedAsset.getCreatedAt());
   }
@@ -716,7 +743,8 @@ public class MyLibraryService {
     if (sourceChat == null) {
       sourceChat = findSourceChat(savedAsset);
     }
-    ChatMessage sourceMessage = findSourceMessage(savedAsset, sourceGeneratedAsset);
+    ChatMessage sourceMessage =
+        findSourceMessage(savedAsset, sourceGeneratedAsset, findGenerationJob(sourceGeneratedAsset));
 
     return new LibraryAssetResponse(
         savedAsset.getId(),
@@ -831,7 +859,16 @@ public class MyLibraryService {
     return chatRepository.findById(savedAsset.getSourceChatId()).orElse(null);
   }
 
-  private ChatMessage findSourceMessage(SavedAsset savedAsset, GeneratedAsset generatedAsset) {
+  private ChatMessage findSourceMessage(
+      SavedAsset savedAsset, GeneratedAsset generatedAsset, GenerationJob generationJob) {
+    if (generationJob != null && generationJob.getRequestMessageId() != null) {
+      ChatMessage requestMessage =
+          chatMessageRepository.findById(generationJob.getRequestMessageId()).orElse(null);
+      if (requestMessage != null) {
+        return requestMessage;
+      }
+    }
+
     Long sourceMessageId = savedAsset.getSourceMessageId();
     if (sourceMessageId == null && generatedAsset != null) {
       sourceMessageId = generatedAsset.getResponseMessageId();
@@ -842,6 +879,43 @@ public class MyLibraryService {
     }
 
     return chatMessageRepository.findById(sourceMessageId).orElse(null);
+  }
+
+  private GenerationJob findGenerationJob(GeneratedAsset generatedAsset) {
+    if (generatedAsset == null || generatedAsset.getGenerationJobId() == null) {
+      return null;
+    }
+    return generationJobRepository.findById(generatedAsset.getGenerationJobId()).orElse(null);
+  }
+
+  private LibraryGenerationMetadataResponse toLibraryGenerationMetadataResponse(
+      GenerationJob job, GeneratedAsset generatedAsset, ChatMessage sourceMessage) {
+    String prompt =
+        firstText(
+            job == null ? null : job.getPrompt(),
+            generatedAsset == null ? null : generatedAsset.getPrompt(),
+            sourceMessage == null ? null : sourceMessage.getContentText());
+    String model = null;
+    if (job != null && job.getRequestPayload() != null) {
+      Object modelCode = job.getRequestPayload().get("modelCode");
+      if (modelCode != null) {
+        model = modelCode.toString();
+      }
+    }
+    String generationType =
+        firstText(
+            job == null ? null : job.getGenerationType(),
+            generatedAsset == null ? null : generatedAsset.getAssetType());
+    return new LibraryGenerationMetadataResponse(prompt, model, generationType);
+  }
+
+  private String firstText(String... values) {
+    for (String value : values) {
+      if (StringUtils.hasText(value)) {
+        return value;
+      }
+    }
+    return null;
   }
 
   private SavedAssetFileResponse toSavedAssetFileResponse(SavedAssetFile file) {
