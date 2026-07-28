@@ -96,8 +96,8 @@ public class FalGenerationAdapter implements FalGenerationPort {
 
   /**
    * GenerationAiService는 프로토콜에 무관한 공용 "images" 키만 채운다. fal.ai 각 모델의 실제 스펙에 맞춰
-   * 여기서 최종 매핑한다. GPT Image 2 편집은 image_urls 배열을 사용하고, 영상 계열은 1장이면
-   * image_url, 2장 이상이면 reference_images로 변환한다. 이미지가 없으면 텍스트 생성 요청으로 전달한다.
+   * 여기서 최종 매핑한다. GPT Image 2 편집과 영상 reference-to-video는 image_urls 배열을 사용한다.
+   * 그 밖의 단일 이미지 모델은 image_url을 사용한다.
    */
   private Map<String, Object> mapImagesForFalPayload(
       String modelCode, Map<String, Object> input) {
@@ -109,6 +109,11 @@ public class FalGenerationAdapter implements FalGenerationPort {
 
     mapped.remove("images");
     if ("openai/gpt-image-2/edit".equals(modelCode)) {
+      mapped.put("image_urls", images);
+      return mapped;
+    }
+
+    if (modelCode.endsWith("/reference-to-video")) {
       mapped.put("image_urls", images);
       return mapped;
     }
