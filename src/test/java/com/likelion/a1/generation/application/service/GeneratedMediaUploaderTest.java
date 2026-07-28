@@ -38,7 +38,8 @@ class GeneratedMediaUploaderTest {
     GenerationStatus result =
         uploader.applyCompletion(staleJob, GenerationStatus.COMPLETED, payload);
 
-    assertThat(result).isEqualTo(GenerationStatus.COMPLETED);
+    // null은 다른 폴러가 이미 종결한 stale job을 호출자가 다시 저장하지 말라는 신호다.
+    assertThat(result).isNull();
     assertThat(payload).doesNotContainKey("s3Url");
     verifyNoInteractions(mediaStoragePort, generationResultService);
   }
