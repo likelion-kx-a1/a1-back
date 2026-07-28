@@ -5,11 +5,12 @@ import java.util.Map;
 
 /** GenerationJob이 COMPLETED/FAILED로 종결됐을 때 발행되는 도메인 이벤트. SSE로 결과를 push하는 데 쓰인다. */
 public record GenerationCompletedEvent(
-    Long userId, Long jobId, String jobType, String status, String resultUrl) {
+    Long userId, Long chatId, Long jobId, String jobType, String status, String resultUrl) {
 
   public static GenerationCompletedEvent from(GenerationJob job) {
     return new GenerationCompletedEvent(
         job.getUserId(),
+        job.getChatId(),
         job.getId(),
         job.getGenerationType(),
         job.getStatus(),

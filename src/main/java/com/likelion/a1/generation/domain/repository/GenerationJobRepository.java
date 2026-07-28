@@ -9,5 +9,7 @@ public interface GenerationJobRepository {
 
   Optional<GenerationJob> findById(Long id);
 
+  Optional<GenerationJob> findByIdForUpdate(Long id);
+
   List<GenerationJob> findByStatusIn(List<String> statuses);
 }

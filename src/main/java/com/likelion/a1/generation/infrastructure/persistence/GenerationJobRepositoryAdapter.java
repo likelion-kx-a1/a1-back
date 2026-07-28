@@ -42,6 +42,10 @@ class GenerationJobRepositoryAdapter implements GenerationJobRepository {
     return repository.findById(id);
   }
 
+  public Optional<GenerationJob> findByIdForUpdate(Long id) {
+    return repository.findByIdForUpdate(id);
+  }
+
   public List<GenerationJob> findByStatusIn(List<String> statuses) {
     return repository.findByStatusIn(statuses);
   }

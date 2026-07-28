@@ -114,12 +114,13 @@ public class GenerationAiService {
     byte[] imageBytes = decodeImage(imageBase64);
     String userInstruction =
         instruction == null || instruction.isBlank()
-            ? "Analyze the image and create prompts that can reproduce it."
+            ? "이미지를 분석하여 장면을 재현할 수 있는 상세한 이미지 생성 프롬프트를 작성해 주세요."
             : instruction.trim();
     String effectiveInstruction =
         userInstruction
-            + "\n\nReturn exactly two distinct prompts. "
-            + "Output only a JSON array containing two strings, without Markdown or explanation.";
+            + "\n\n서로 다른 프롬프트를 정확히 두 개 작성하세요. "
+            + "두 프롬프트는 반드시 자연스러운 한국어로 작성하고 영어 문장으로 작성하지 마세요. "
+            + "마크다운이나 부가 설명 없이 두 문자열만 포함한 JSON 배열로 출력하세요.";
 
     Map<String, Object> requestPayload = new LinkedHashMap<>();
     requestPayload.put("mimeType", mimeType);
@@ -148,8 +149,14 @@ public class GenerationAiService {
       PerformanceMetrics.announce(job.getId(), responsePayload);
       job.complete(responsePayload);
       generationResultService.saveAssistantTextResult(
-          userId, chatId, job.getRequestMessageId(), job.getId(), result.text(), null, null);
-    } catch (RestClientResponseException exception) {
+          userId,
+          chatId,
+          job.getRequestMessageId(),
+          job.getId(),
+          result.text(),
+          "IMAGE",
+          "ETC");
+    } catch (RuntimeException exception) {
       job.fail(exception.getMessage());
       generationJobRepository.save(job);
       safeFinishGenerating(userId, chatId);
@@ -426,7 +433,12 @@ public class GenerationAiService {
   }
 
   public GenerationJob getStatus(Long jobId, Long userId) {
-    GenerationJob job = findJob(jobId);
+    // 백그라운드 스케줄러와 동시에 완료 처리될 때 S3 업로드와 채팅 응답이 중복 생성되지
+    // 않도록 이 상태 조회 트랜잭션도 같은 GenerationJob 행을 잠근다.
+    GenerationJob job =
+        generationJobRepository
+            .findByIdForUpdate(jobId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.GENERATION_NOT_FOUND));
     verifyOwnership(job, userId);
     if (isTerminal(job.getStatus())) {
       return job;
