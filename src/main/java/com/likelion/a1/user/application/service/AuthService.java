@@ -98,6 +98,17 @@ public class AuthService {
     return new SignupResponse(saved.getId(), saved.getApprovalStatus(), saved.getAccountStatus());
   }
 
+  @Transactional(readOnly = true)
+  public SignupStatusResponse getSignupStatus(String loginId, String email) {
+    User user =
+        userRepository
+            .findByLoginId(loginId)
+            .filter(candidate -> candidate.getEmail().equalsIgnoreCase(email))
+            .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+    return new SignupStatusResponse(user.getApprovalStatus(), user.getAccountStatus());
+  }
+
   @Transactional
   public LoginResponse login(LoginRequest request, String ipAddress, String userAgent) {
     if (ipAddress != null

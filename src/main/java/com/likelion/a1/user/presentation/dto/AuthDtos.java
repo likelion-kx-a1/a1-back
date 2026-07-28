@@ -50,6 +50,10 @@ public final class AuthDtos {
       String approvalStatus,
       String accountStatus) {}
 
+  public record SignupStatusResponse(
+      String approvalStatus,
+      String accountStatus) {}
+
   public record LoginRequest(
       @NotBlank String loginId,
       @NotBlank String password) {}
