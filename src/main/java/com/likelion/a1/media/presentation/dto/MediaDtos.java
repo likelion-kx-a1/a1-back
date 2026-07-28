@@ -114,7 +114,7 @@ public final class MediaDtos {
       Long folderId,
       String displayName) {}
 
-  public record UpdateSavedAssetRequest(String displayName) {}
+  public record UpdateSavedAssetRequest(String displayName, Long folderId) {}
 
   public record SavedAssetResponse(
       Long id,

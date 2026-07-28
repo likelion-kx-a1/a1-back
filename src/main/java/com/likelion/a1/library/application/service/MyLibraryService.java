@@ -386,7 +386,13 @@ public class MyLibraryService {
   public SavedAssetResponse updateSavedAsset(
       Long userId, Long savedAssetId, UpdateSavedAssetRequest request) {
     SavedAsset savedAsset = findOwnedSavedAsset(userId, savedAssetId);
-    savedAsset.updateDisplayName(normalizeRequired(request.displayName()));
+    if (StringUtils.hasText(request.displayName())) {
+      savedAsset.updateDisplayName(request.displayName().trim());
+    }
+    if (request.folderId() != null) {
+      findOwnedFolder(userId, savedAsset.getLibraryProjectId(), request.folderId());
+      savedAsset.moveToFolder(request.folderId());
+    }
 
     return toSavedAssetResponse(
         savedAssetRepository.save(savedAsset),
