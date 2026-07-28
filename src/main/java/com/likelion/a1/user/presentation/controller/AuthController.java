@@ -18,6 +18,7 @@ import com.likelion.a1.user.presentation.dto.AuthDtos.MeResponse;
 import com.likelion.a1.user.presentation.dto.AuthDtos.PasswordResetRequest;
 import com.likelion.a1.user.presentation.dto.AuthDtos.SignupRequest;
 import com.likelion.a1.user.presentation.dto.AuthDtos.SignupResponse;
+import com.likelion.a1.user.presentation.dto.AuthDtos.SignupStatusResponse;
 import com.likelion.a1.user.presentation.dto.AuthDtos.TokenRefreshRequest;
 import com.likelion.a1.user.presentation.dto.AuthDtos.TokenRefreshResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -74,6 +75,15 @@ public class AuthController {
         "SIGNUP_REQUESTED",
         "회원가입 신청이 완료되었습니다. 관리자 승인 후 이용 가능합니다.",
         authService.signup(request));
+  }
+
+  @GetMapping("/signup/status")
+  public ApiResponse<SignupStatusResponse> signupStatus(
+      @RequestParam String loginId, @RequestParam String email) {
+    return ApiResponse.success(
+        "SIGNUP_STATUS_FETCHED",
+        "회원가입 승인 상태를 조회했습니다.",
+        authService.getSignupStatus(loginId, email));
   }
 
   @PostMapping("/login")

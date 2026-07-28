@@ -22,6 +22,7 @@ import com.likelion.a1.user.infrastructure.security.JwtTokenProvider;
 import com.likelion.a1.user.infrastructure.security.TokenHashService;
 import com.likelion.a1.user.presentation.dto.AuthDtos.LoginRequest;
 import com.likelion.a1.user.presentation.dto.AuthDtos.LoginResponse;
+import com.likelion.a1.user.presentation.dto.AuthDtos.SignupStatusResponse;
 import com.likelion.a1.user.presentation.dto.AuthDtos.TokenRefreshRequest;
 import com.likelion.a1.user.presentation.dto.AuthDtos.TokenRefreshResponse;
 import java.time.Duration;
@@ -84,6 +85,29 @@ class AuthServiceTest {
   private void stubIpAndLockPass() {
     when(rateLimiter.tryConsume(anyString(), anyLong(), any(Duration.class))).thenReturn(true);
     when(rateLimiter.isLocked(anyString())).thenReturn(false);
+  }
+
+  @Test
+  void signupStatus_returnsApprovalStatusWhenLoginIdAndEmailMatch() {
+    User user = activeUser();
+    when(userRepository.findByLoginId(LOGIN_ID)).thenReturn(Optional.of(user));
+
+    SignupStatusResponse response =
+        authService.getSignupStatus(LOGIN_ID, "tester@example.com");
+
+    assertThat(response.approvalStatus()).isEqualTo("APPROVED");
+    assertThat(response.accountStatus()).isEqualTo("ACTIVE");
+  }
+
+  @Test
+  void signupStatus_rejectsMismatchedEmail() {
+    when(userRepository.findByLoginId(LOGIN_ID)).thenReturn(Optional.of(activeUser()));
+
+    assertThatThrownBy(
+            () -> authService.getSignupStatus(LOGIN_ID, "another@example.com"))
+        .isInstanceOf(BusinessException.class)
+        .extracting(exception -> ((BusinessException) exception).errorCode())
+        .isEqualTo(ErrorCode.USER_NOT_FOUND);
   }
 
   @Test
