@@ -33,7 +33,7 @@ public class EmailVerificationService {
   private static final long VERIFICATION_EXPIRATION_MINUTES = 5;
 
   private static final Duration EMAIL_SEND_COOLDOWN = Duration.ofSeconds(60);
-  private static final long EMAIL_SEND_MAX_PER_HOUR = 5;
+  private static final long EMAIL_SEND_MAX_PER_HOUR = 10;
   private static final long EMAIL_SEND_IP_MAX_PER_HOUR = 20;
   private static final long EMAIL_VERIFY_MAX_ATTEMPTS = 5;
   private static final Duration VERIFY_ATTEMPT_WINDOW = Duration.ofMinutes(VERIFICATION_EXPIRATION_MINUTES);
