@@ -45,7 +45,7 @@ public class FalGenerationAdapter implements FalGenerationPort {
         restTemplate.exchange(
             baseUrl + "/" + modelCode,
             HttpMethod.POST,
-            new HttpEntity<>(mapImagesForFalPayload(input), buildHeaders()),
+            new HttpEntity<>(mapImagesForFalPayload(modelCode, input), buildHeaders()),
             String.class);
 
     Map<String, Object> raw = parseJson(response.getBody());
@@ -96,20 +96,47 @@ public class FalGenerationAdapter implements FalGenerationPort {
 
   /**
    * GenerationAiService는 프로토콜에 무관한 공용 "images" 키만 채운다. fal.ai 각 모델의 실제 스펙에 맞춰
-   * 여기서 최종 매핑한다: 1장이면 image_url(단일 문자열), 2장 이상이면 reference_images(배열)로 변환한다
-   * (api_2.md 3번 규격). 0장(text-to-video)이면 images 키 자체가 없으므로 원본 그대로 전달한다.
+   * 여기서 최종 매핑한다. GPT Image 2 편집은 image_urls 배열을 사용하고, 영상 계열은 1장이면
+   * image_url, 2장 이상이면 reference_images로 변환한다. 이미지가 없으면 텍스트 생성 요청으로 전달한다.
    */
-  private Map<String, Object> mapImagesForFalPayload(Map<String, Object> input) {
+  private Map<String, Object> mapImagesForFalPayload(
+      String modelCode, Map<String, Object> input) {
+    Map<String, Object> mapped = mapImageSizeForGptImage(modelCode, input);
+
     if (!(input.get("images") instanceof List<?> images) || images.isEmpty()) {
-      return input;
+      return mapped;
     }
 
-    Map<String, Object> mapped = new LinkedHashMap<>(input);
     mapped.remove("images");
+    if ("openai/gpt-image-2/edit".equals(modelCode)) {
+      mapped.put("image_urls", images);
+      return mapped;
+    }
+
     if (images.size() == 1) {
       mapped.put("image_url", images.get(0));
     } else {
       mapped.put("reference_images", images);
+    }
+    return mapped;
+  }
+
+  private Map<String, Object> mapImageSizeForGptImage(
+      String modelCode, Map<String, Object> input) {
+    if (!modelCode.startsWith("openai/gpt-image-2")) {
+      return input;
+    }
+
+    Map<String, Object> mapped = new LinkedHashMap<>(input);
+    Object aspectRatio = mapped.remove("aspect_ratio");
+    if (aspectRatio instanceof String ratio && !mapped.containsKey("image_size")) {
+      mapped.put(
+          "image_size",
+          switch (ratio) {
+            case "16:9" -> "landscape_16_9";
+            case "9:16" -> "portrait_16_9";
+            default -> "square_hd";
+          });
     }
     return mapped;
   }
