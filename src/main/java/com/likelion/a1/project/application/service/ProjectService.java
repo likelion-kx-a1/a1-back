@@ -1,6 +1,10 @@
 package com.likelion.a1.project.application.service;
 
 import com.likelion.a1.chat.domain.model.Chat;
+import com.likelion.a1.chat.domain.model.ChatMessage;
+import com.likelion.a1.chat.domain.model.ChatMessageFile;
+import com.likelion.a1.chat.domain.repository.ChatMessageFileRepository;
+import com.likelion.a1.chat.domain.repository.ChatMessageRepository;
 import com.likelion.a1.chat.domain.repository.ChatRepository;
 import com.likelion.a1.global.exception.BusinessException;
 import com.likelion.a1.global.exception.ErrorCode;
@@ -10,8 +14,13 @@ import com.likelion.a1.project.domain.model.Project;
 import com.likelion.a1.project.domain.repository.ProjectRepository;
 import com.likelion.a1.project.presentation.dto.ProjectDtos.CreateRequest;
 import com.likelion.a1.project.presentation.dto.ProjectDtos.Response;
+import com.likelion.a1.project.presentation.dto.ProjectDtos.ThumbnailResponse;
 import com.likelion.a1.project.presentation.dto.ProjectDtos.UpdateRequest;
 import java.util.List;
+import java.util.Comparator;
+import java.util.Map;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,14 +30,20 @@ public class ProjectService {
   private final ProjectRepository projectRepository;
   private final ChatRepository chatRepository;
   private final MyLibraryService myLibraryService;
+  private final ChatMessageRepository chatMessageRepository;
+  private final ChatMessageFileRepository chatMessageFileRepository;
 
   public ProjectService(
       ProjectRepository projectRepository,
       ChatRepository chatRepository,
-      MyLibraryService myLibraryService) {
+      MyLibraryService myLibraryService,
+      ChatMessageRepository chatMessageRepository,
+      ChatMessageFileRepository chatMessageFileRepository) {
     this.projectRepository = projectRepository;
     this.chatRepository = chatRepository;
     this.myLibraryService = myLibraryService;
+    this.chatMessageRepository = chatMessageRepository;
+    this.chatMessageFileRepository = chatMessageFileRepository;
   }
 
   public Response create(Long userId, CreateRequest request) {
@@ -126,7 +141,64 @@ public class ProjectService {
         project.getStatus(),
         defaultChatId,
         libraryProjectId,
+        resolveThumbnail(project),
         project.getCreatedAt(),
         project.getUpdatedAt());
   }
+
+  private ThumbnailResponse resolveThumbnail(Project project) {
+    List<ThumbnailCandidate> candidates =
+        chatRepository.findActiveByUserIdAndProjectId(project.getUserId(), project.getId()).stream()
+            .flatMap(
+                chat -> {
+                  List<ChatMessage> messages = chatMessageRepository.findActiveByChatId(chat.getId());
+                  if (messages.isEmpty()) {
+                    return java.util.stream.Stream.empty();
+                  }
+                  Map<Long, ChatMessage> messageById =
+                      messages.stream().collect(Collectors.toMap(ChatMessage::getId, message -> message));
+                  return chatMessageFileRepository
+                      .findByMessageIds(messageById.keySet())
+                      .stream()
+                      .map(file -> new ThumbnailCandidate(chat.getId(), messageById.get(file.getMessageId()), file));
+                })
+            .filter(candidate -> candidate.message() != null)
+            .toList();
+
+    Predicate<ThumbnailCandidate> generated =
+        candidate ->
+            candidate.message().getGeneratedAssetId() != null
+                && isPreviewable(candidate.file());
+    Predicate<ThumbnailCandidate> uploadedImage =
+        candidate ->
+            "USER".equalsIgnoreCase(candidate.message().getSenderType())
+                && "IMAGE".equalsIgnoreCase(candidate.file().getFileType());
+
+    return candidates.stream()
+        .filter(generated)
+        .min(Comparator.comparing(candidate -> candidate.file().getCreatedAt()))
+        .or(() ->
+            candidates.stream()
+                .filter(uploadedImage)
+                .min(Comparator.comparing(candidate -> candidate.file().getCreatedAt())))
+        .map(this::toThumbnailResponse)
+        .orElse(null);
+  }
+
+  private boolean isPreviewable(ChatMessageFile file) {
+    return "IMAGE".equalsIgnoreCase(file.getFileType())
+        || "VIDEO".equalsIgnoreCase(file.getFileType());
+  }
+
+  private ThumbnailResponse toThumbnailResponse(ThumbnailCandidate candidate) {
+    ChatMessageFile file = candidate.file();
+    return new ThumbnailResponse(
+        candidate.chatId(),
+        file.getId(),
+        file.getFileType(),
+        file.getPublicUrl(),
+        file.getOriginalFilename());
+  }
+
+  private record ThumbnailCandidate(Long chatId, ChatMessage message, ChatMessageFile file) {}
 }
