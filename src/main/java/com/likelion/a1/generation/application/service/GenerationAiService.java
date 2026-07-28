@@ -31,7 +31,8 @@ import org.springframework.web.client.RestClientResponseException;
 @Transactional
 public class GenerationAiService {
   private static final Logger log = LoggerFactory.getLogger(GenerationAiService.class);
-  private static final int MAX_REFERENCE_IMAGES = 9;
+  private static final int SEEDANCE_MAX_REFERENCE_IMAGES = 9;
+  private static final int KLING_MAX_REFERENCE_IMAGES = 4;
 
   private final GenerationJobRepository generationJobRepository;
   private final PromptGenerationPort promptGenerationPort;
@@ -338,9 +339,16 @@ public class GenerationAiService {
       Boolean refinePrompt,
       Long parentMessageId) {
     List<String> safeImages = images == null ? List.of() : images;
-    if (safeImages.size() > MAX_REFERENCE_IMAGES) {
+    int maxReferenceImages =
+        highQuality ? SEEDANCE_MAX_REFERENCE_IMAGES : KLING_MAX_REFERENCE_IMAGES;
+    if (safeImages.size() > maxReferenceImages) {
       throw new BusinessException(
-          ErrorCode.INVALID_INPUT, List.of("참조 이미지는 최대 " + MAX_REFERENCE_IMAGES + "장까지만 지원합니다."));
+          ErrorCode.INVALID_INPUT,
+          List.of(
+              (highQuality ? "Seedance" : "Kling")
+                  + " 참조 이미지는 최대 "
+                  + maxReferenceImages
+                  + "장까지 지원합니다."));
     }
     boolean shouldRefine = refinePrompt == null || refinePrompt;
 
@@ -524,12 +532,11 @@ public class GenerationAiService {
 
   /**
    * highQuality=true -> ByteDance Seedance 2.0, false -> fal.ai Kling O3 Standard.
-   * 이미지 0장은 text-to-video, 1장은 image-to-video, 2장 이상은 reference-to-video로 분기한다.
+   * 이미지가 없으면 text-to-video, 한 장 이상이면 장수와 관계없이 reference-to-video로 분기한다.
    */
   private String resolveVideoModelCode(boolean highQuality, int imageCount) {
     String family = highQuality ? "bytedance/seedance-2.0" : "fal-ai/kling-video/o3/standard";
-    String variant =
-        imageCount == 0 ? "text-to-video" : imageCount == 1 ? "image-to-video" : "reference-to-video";
+    String variant = imageCount == 0 ? "text-to-video" : "reference-to-video";
     return family + "/" + variant;
   }
 
