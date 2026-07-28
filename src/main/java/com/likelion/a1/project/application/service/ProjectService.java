@@ -65,26 +65,25 @@ public class ProjectService {
   }
 
   public void delete(Long userId, Long projectId) {
-    deleteProjectAndChats(userId, projectId);
-    myLibraryService.detachLinkedLibraryProject(userId, projectId);
+    findOwnedProject(userId, projectId);
+    deleteProjectChats(userId, projectId);
   }
 
   public void deleteWithLibrary(Long userId, Long projectId) {
-    deleteProjectAndChats(userId, projectId);
+    Project project = findOwnedProject(userId, projectId);
+    deleteProjectChats(userId, projectId);
     myLibraryService.deleteLinkedLibraryProject(userId, projectId);
+    project.delete();
+    projectRepository.save(project);
   }
 
-  private void deleteProjectAndChats(Long userId, Long projectId) {
-    Project project = findOwnedProject(userId, projectId);
+  private void deleteProjectChats(Long userId, Long projectId) {
     chatRepository.findActiveByUserIdAndProjectId(userId, projectId).stream()
         .forEach(
             chat -> {
               chat.delete();
               chatRepository.save(chat);
             });
-
-    project.delete();
-    projectRepository.save(project);
   }
 
   @Transactional(readOnly = true)
