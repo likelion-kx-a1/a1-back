@@ -21,6 +21,13 @@ public final class ProjectDtos {
 
       String description) {}
 
+  public record ThumbnailResponse(
+      Long chatId,
+      Long fileId,
+      String fileType,
+      String publicUrl,
+      String originalFilename) {}
+
   public record Response(
       Long projectId,
       String name,
@@ -28,6 +35,7 @@ public final class ProjectDtos {
       String status,
       Long defaultChatId,
       Long libraryProjectId,
+      ThumbnailResponse thumbnail,
       OffsetDateTime createdAt,
       OffsetDateTime updatedAt) {}
 }

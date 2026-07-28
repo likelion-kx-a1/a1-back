@@ -7,6 +7,8 @@ import static org.mockito.Mockito.when;
 
 import com.likelion.a1.chat.domain.model.Chat;
 import com.likelion.a1.chat.domain.repository.ChatRepository;
+import com.likelion.a1.chat.domain.repository.ChatMessageFileRepository;
+import com.likelion.a1.chat.domain.repository.ChatMessageRepository;
 import com.likelion.a1.library.application.service.MyLibraryService;
 import com.likelion.a1.project.domain.model.Project;
 import com.likelion.a1.project.domain.repository.ProjectRepository;
@@ -26,6 +28,8 @@ class ProjectServiceTest {
   @Mock private ProjectRepository projectRepository;
   @Mock private ChatRepository chatRepository;
   @Mock private MyLibraryService myLibraryService;
+  @Mock private ChatMessageRepository chatMessageRepository;
+  @Mock private ChatMessageFileRepository chatMessageFileRepository;
   @Mock private Project project;
   @Mock private Chat firstChat;
   @Mock private Chat secondChat;
@@ -34,7 +38,13 @@ class ProjectServiceTest {
 
   @BeforeEach
   void setUp() {
-    projectService = new ProjectService(projectRepository, chatRepository, myLibraryService);
+    projectService =
+        new ProjectService(
+            projectRepository,
+            chatRepository,
+            myLibraryService,
+            chatMessageRepository,
+            chatMessageFileRepository);
     when(projectRepository.findById(PROJECT_ID)).thenReturn(Optional.of(project));
     when(project.isDeleted()).thenReturn(false);
     when(project.isOwnedBy(USER_ID)).thenReturn(true);
