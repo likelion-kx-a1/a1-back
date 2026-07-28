@@ -9,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -25,6 +26,12 @@ public class GlobalExceptionHandler {
             .map(error -> error.getField() + ": " + error.getDefaultMessage())
             .toList();
     return ResponseEntity.badRequest().body(ErrorResponse.of(ErrorCode.INVALID_INPUT, details));
+  }
+
+  @ExceptionHandler(MaxUploadSizeExceededException.class)
+  ResponseEntity<ErrorResponse> handleMaxUploadSize(MaxUploadSizeExceededException exception) {
+    ErrorCode code = ErrorCode.PAYLOAD_TOO_LARGE;
+    return ResponseEntity.status(code.status()).body(ErrorResponse.of(code, List.of()));
   }
 
   @ExceptionHandler(RestClientResponseException.class)
