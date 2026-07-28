@@ -180,9 +180,10 @@ public class GenerationAiService {
     if (finalPrompt != null) {
       effectiveInput.put("prompt", finalPrompt);
     }
+    String effectiveModelCode = resolveImageModelCode(type, modelCode, effectiveInput);
 
     Map<String, Object> requestPayload = new LinkedHashMap<>();
-    requestPayload.put("modelCode", modelCode);
+    requestPayload.put("modelCode", effectiveModelCode);
     requestPayload.put("input", effectiveInput);
     requestPayload.put("sheetType", sheetType);
     requestPayload.put("sheetValue", sheetValue);
@@ -198,7 +199,7 @@ public class GenerationAiService {
 
     try {
       long startedAtMs = System.currentTimeMillis();
-      FalGenerationSubmission submission = falGenerationPort.submit(modelCode, effectiveInput);
+      FalGenerationSubmission submission = falGenerationPort.submit(effectiveModelCode, effectiveInput);
       long submissionLatencyMs = System.currentTimeMillis() - startedAtMs;
 
       Map<String, Object> responsePayload = new LinkedHashMap<>();
@@ -243,9 +244,10 @@ public class GenerationAiService {
     boolean hasReferenceImages = input.get("images") instanceof List<?> images && !images.isEmpty();
     CharacterSheetSettings settings = CharacterSheetSettings.orEmpty(characterSettings);
     boolean shouldEnhance = Boolean.TRUE.equals(aiEnhance);
+    String effectiveModelCode = resolveImageModelCode(type, modelCode, input);
 
     Map<String, Object> requestPayload = new LinkedHashMap<>();
-    requestPayload.put("modelCode", modelCode);
+    requestPayload.put("modelCode", effectiveModelCode);
     requestPayload.put("input", input);
     requestPayload.put("generationMode", "character_sheet");
     requestPayload.put("aiEnhance", shouldEnhance);
@@ -272,7 +274,7 @@ public class GenerationAiService {
       effectiveInput.put("prompt", finalPrompt);
 
       long submitStartedAtMs = System.currentTimeMillis();
-      FalGenerationSubmission submission = falGenerationPort.submit(modelCode, effectiveInput);
+      FalGenerationSubmission submission = falGenerationPort.submit(effectiveModelCode, effectiveInput);
       long submissionLatencyMs = System.currentTimeMillis() - submitStartedAtMs;
 
       Map<String, Object> responsePayload = new LinkedHashMap<>();
@@ -293,6 +295,21 @@ public class GenerationAiService {
     }
 
     return generationJobRepository.save(job);
+  }
+
+  private String resolveImageModelCode(
+      GenerationType type, String modelCode, Map<String, Object> input) {
+    boolean isImageGeneration =
+        type == GenerationType.IMAGE_GENERATION || type == GenerationType.IMAGE_VARIATION;
+    boolean hasReferenceImages =
+        input.get("images") instanceof List<?> images && !images.isEmpty();
+
+    if (isImageGeneration
+        && hasReferenceImages
+        && "openai/gpt-image-2".equals(modelCode)) {
+      return "openai/gpt-image-2/edit";
+    }
+    return modelCode;
   }
 
   /**
