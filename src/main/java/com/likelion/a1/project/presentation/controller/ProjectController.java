@@ -86,8 +86,8 @@ public class ProjectController {
     projectService.delete(principal.userId(), projectId);
 
     return ApiResponse.success(
-        "PROJECT_DELETED",
-        "프로젝트가 삭제되었습니다. 보관함은 유지됩니다.",
+        "PROJECT_CHATS_DELETED",
+        "프로젝트의 채팅이 삭제되었습니다. 프로젝트와 보관함은 유지됩니다.",
         null);
   }
 
