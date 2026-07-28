@@ -64,6 +64,11 @@ class EmailVerificationServiceTest {
     verify(emailVerificationRepository).save(any(EmailVerification.class));
     verify(emailSenderPort).sendVerificationCode(eq(EMAIL), eq(PURPOSE), anyString());
     verify(rateLimiter).reset(anyString());
+    verify(rateLimiter)
+        .tryConsume(
+            eq("auth:email-send:hourly:" + PURPOSE + ":" + EMAIL),
+            eq(10L),
+            eq(Duration.ofHours(1)));
   }
 
   @Test
