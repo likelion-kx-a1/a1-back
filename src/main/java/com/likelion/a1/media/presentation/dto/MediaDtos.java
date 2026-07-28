@@ -90,6 +90,9 @@ public final class MediaDtos {
       String imageCategory,
       OffsetDateTime createdAt) {}
 
+  public record LibraryGenerationMetadataResponse(
+      String prompt, String model, String generationType) {}
+
   public record LibraryAssetResponse(
       Long id,
       Long userId,
@@ -126,6 +129,11 @@ public final class MediaDtos {
       String displayName,
       String assetType,
       String status,
+      LibraryProjectSummaryResponse libraryProject,
+      LibrarySourceChatResponse sourceChat,
+      LibrarySourceMessageResponse sourceMessage,
+      LibrarySourceGeneratedAssetResponse sourceGeneratedAsset,
+      LibraryGenerationMetadataResponse generationMetadata,
       List<SavedAssetFileResponse> files,
       OffsetDateTime createdAt) {}
 
