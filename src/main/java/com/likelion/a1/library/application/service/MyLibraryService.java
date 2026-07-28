@@ -703,7 +703,8 @@ public class MyLibraryService {
   private SavedAssetResponse toSavedAssetResponse(
       SavedAsset savedAsset, List<SavedAssetFile> files) {
     GeneratedAsset sourceGeneratedAsset = findSourceGeneratedAsset(savedAsset);
-    GenerationJob generationJob = findGenerationJob(sourceGeneratedAsset);
+    ChatMessage storedSourceMessage = findStoredSourceMessage(savedAsset, sourceGeneratedAsset);
+    GenerationJob generationJob = findGenerationJob(sourceGeneratedAsset, storedSourceMessage);
     Chat sourceChat = findSourceChat(sourceGeneratedAsset);
     if (sourceChat == null) {
       sourceChat = findSourceChat(savedAsset);
@@ -739,12 +740,14 @@ public class MyLibraryService {
       LibraryProjectSummaryResponse libraryProject,
       List<SavedAssetFile> files) {
     GeneratedAsset sourceGeneratedAsset = findSourceGeneratedAsset(savedAsset);
+    ChatMessage storedSourceMessage = findStoredSourceMessage(savedAsset, sourceGeneratedAsset);
+    GenerationJob generationJob = findGenerationJob(sourceGeneratedAsset, storedSourceMessage);
     Chat sourceChat = findSourceChat(sourceGeneratedAsset);
     if (sourceChat == null) {
       sourceChat = findSourceChat(savedAsset);
     }
     ChatMessage sourceMessage =
-        findSourceMessage(savedAsset, sourceGeneratedAsset, findGenerationJob(sourceGeneratedAsset));
+        findSourceMessage(savedAsset, sourceGeneratedAsset, generationJob);
 
     return new LibraryAssetResponse(
         savedAsset.getId(),
@@ -881,11 +884,36 @@ public class MyLibraryService {
     return chatMessageRepository.findById(sourceMessageId).orElse(null);
   }
 
-  private GenerationJob findGenerationJob(GeneratedAsset generatedAsset) {
-    if (generatedAsset == null || generatedAsset.getGenerationJobId() == null) {
-      return null;
+  private ChatMessage findStoredSourceMessage(
+      SavedAsset savedAsset, GeneratedAsset generatedAsset) {
+    Long sourceMessageId = savedAsset.getSourceMessageId();
+    if (sourceMessageId == null && generatedAsset != null) {
+      sourceMessageId = generatedAsset.getResponseMessageId();
     }
-    return generationJobRepository.findById(generatedAsset.getGenerationJobId()).orElse(null);
+    return sourceMessageId == null
+        ? null
+        : chatMessageRepository.findById(sourceMessageId).orElse(null);
+  }
+
+  private GenerationJob findGenerationJob(
+      GeneratedAsset generatedAsset, ChatMessage storedSourceMessage) {
+    Long generationJobId =
+        generatedAsset == null ? null : generatedAsset.getGenerationJobId();
+    if (generationJobId == null && storedSourceMessage != null) {
+      generationJobId = storedSourceMessage.getGenerationJobId();
+    }
+    if (generationJobId == null
+        && storedSourceMessage != null
+        && storedSourceMessage.getGeneratedAssetId() != null) {
+      generationJobId =
+          generatedAssetRepository
+              .findById(storedSourceMessage.getGeneratedAssetId())
+              .map(GeneratedAsset::getGenerationJobId)
+              .orElse(null);
+    }
+    return generationJobId == null
+        ? null
+        : generationJobRepository.findById(generationJobId).orElse(null);
   }
 
   private LibraryGenerationMetadataResponse toLibraryGenerationMetadataResponse(
