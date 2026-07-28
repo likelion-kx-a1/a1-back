@@ -4,6 +4,7 @@ import com.likelion.a1.user.domain.model.User;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -15,14 +16,24 @@ public final class AuthDtos {
 
   public record EmailSendRequest(
       @Email @NotBlank String email,
-      @NotBlank String purpose) {}
+      @NotBlank
+          @Pattern(
+              regexp = "SIGNUP|PASSWORD_RESET",
+              message = "purpose는 SIGNUP 또는 PASSWORD_RESET이어야 합니다.")
+          String purpose) {}
 
   public record EmailSendResponse(OffsetDateTime expiredAt) {}
 
   public record EmailVerifyRequest(
       @Email @NotBlank String email,
-      @NotBlank String code,
-      @NotBlank String purpose) {}
+      @NotBlank
+          @Pattern(regexp = "\\d{6}", message = "인증번호는 숫자 6자리여야 합니다.")
+          String code,
+      @NotBlank
+          @Pattern(
+              regexp = "SIGNUP|PASSWORD_RESET",
+              message = "purpose는 SIGNUP 또는 PASSWORD_RESET이어야 합니다.")
+          String purpose) {}
 
   public record EmailVerifyResponse(boolean verified) {}
 
