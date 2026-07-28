@@ -24,6 +24,40 @@ class FalGenerationAdapterImageMappingTest {
         List.of("one", "two"));
   }
 
+  @Test
+  void gptImageAlwaysUsesMediumQuality() {
+    FalGenerationAdapter adapter =
+        new FalGenerationAdapter(mock(ObjectMapper.class), "https://queue.fal.run", "key");
+    Map<String, Object> input = new LinkedHashMap<>();
+    input.put("prompt", "prompt");
+    input.put("quality", "high");
+
+    Map<String, Object> mapped =
+        ReflectionTestUtils.invokeMethod(
+            adapter, "mapImagesForFalPayload", "openai/gpt-image-2", input);
+
+    assertThat(mapped).containsEntry("quality", "medium");
+  }
+
+  @Test
+  void gptImageEditUsesImageUrlsAndMediumQuality() {
+    FalGenerationAdapter adapter =
+        new FalGenerationAdapter(mock(ObjectMapper.class), "https://queue.fal.run", "key");
+    List<String> images = List.of("https://example.com/reference.png");
+    Map<String, Object> input = new LinkedHashMap<>();
+    input.put("prompt", "prompt");
+    input.put("images", images);
+
+    Map<String, Object> mapped =
+        ReflectionTestUtils.invokeMethod(
+            adapter, "mapImagesForFalPayload", "openai/gpt-image-2/edit", input);
+
+    assertThat(mapped)
+        .containsEntry("quality", "medium")
+        .containsEntry("image_urls", images)
+        .doesNotContainKey("images");
+  }
+
   @SuppressWarnings("unchecked")
   private void assertMappedImages(
       FalGenerationAdapter adapter, String modelCode, List<String> images) {

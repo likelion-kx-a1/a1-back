@@ -133,6 +133,9 @@ public class FalGenerationAdapter implements FalGenerationPort {
     }
 
     Map<String, Object> mapped = new LinkedHashMap<>(input);
+    // GPT Image 2의 기본값은 high이므로, 모든 이미지 생성/편집 요청을 medium으로 강제한다.
+    // 클라이언트가 다른 quality를 보내더라도 이 서버 정책이 우선한다.
+    mapped.put("quality", "medium");
     Object aspectRatio = mapped.remove("aspect_ratio");
     if (aspectRatio instanceof String ratio && !mapped.containsKey("image_size")) {
       mapped.put(
