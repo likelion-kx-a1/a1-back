@@ -18,6 +18,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
 /** prod 프로필용 실제 fal.ai 큐 API 연동. Kling/Seedance/GPT Image 2 등 모델 코드를 그대로 라우팅한다. */
@@ -55,19 +56,39 @@ public class FalGenerationAdapter implements FalGenerationPort {
   }
 
   @Override
-  public FalGenerationStatus poll(String modelCode, String externalRequestId) {
-    String statusUrl = baseUrl + "/" + modelCode + "/requests/" + externalRequestId + "/status";
+  public FalGenerationStatus poll(
+      String modelCode,
+      String externalRequestId,
+      String statusUrl,
+      String responseUrl) {
+    String resolvedStatusUrl = resolveUrl(statusUrl, modelCode, externalRequestId, "/status");
     ResponseEntity<String> statusResponse =
-        restTemplate.exchange(statusUrl, HttpMethod.GET, new HttpEntity<>(buildHeaders()), String.class);
+        restTemplate.exchange(
+            resolvedStatusUrl,
+            HttpMethod.GET,
+            new HttpEntity<>(buildHeaders()),
+            String.class);
 
     Map<String, Object> raw = new LinkedHashMap<>(parseJson(statusResponse.getBody()));
     String status = String.valueOf(raw.get("status"));
 
     if ("COMPLETED".equals(status)) {
-      String responseUrl = baseUrl + "/" + modelCode + "/requests/" + externalRequestId;
-      ResponseEntity<String> resultResponse =
-          restTemplate.exchange(responseUrl, HttpMethod.GET, new HttpEntity<>(buildHeaders()), String.class);
-      raw.putAll(parseJson(resultResponse.getBody()));
+      String resolvedResponseUrl = resolveUrl(responseUrl, modelCode, externalRequestId, "");
+      try {
+        ResponseEntity<String> resultResponse =
+            restTemplate.exchange(
+                resolvedResponseUrl,
+                HttpMethod.GET,
+                new HttpEntity<>(buildHeaders()),
+                String.class);
+        raw.putAll(parseJson(resultResponse.getBody()));
+      } catch (RestClientResponseException exception) {
+        raw.put("status", "FAILED");
+        raw.put("providerHttpStatus", exception.getStatusCode().value());
+        raw.put("providerError", parseErrorBody(exception.getResponseBodyAsString()));
+        raw.put("errorMessage", resolveErrorMessage(exception));
+        status = "FAILED";
+      }
     }
 
     return new FalGenerationStatus(status, raw);
@@ -112,6 +133,35 @@ public class FalGenerationAdapter implements FalGenerationPort {
       return objectMapper.readValue(body, new TypeReference<Map<String, Object>>() {});
     } catch (RuntimeException exception) {
       throw new BusinessException(ErrorCode.AI_PROVIDER_REQUEST_FAILED);
+    }
+  }
+
+  private Object parseErrorBody(String body) {
+    try {
+      return objectMapper.readValue(body, new TypeReference<Map<String, Object>>() {});
+    } catch (RuntimeException exception) {
+      return body;
+    }
+  }
+
+  private String resolveErrorMessage(RestClientResponseException exception) {
+    Map<String, Object> error = parseJsonSafely(exception.getResponseBodyAsString());
+    Object detail = error.get("detail");
+    if (detail instanceof List<?> details
+        && !details.isEmpty()
+        && details.get(0) instanceof Map<?, ?> first
+        && first.get("msg") instanceof String message
+        && !message.isBlank()) {
+      return message;
+    }
+    return "FAL result request failed with HTTP " + exception.getStatusCode().value();
+  }
+
+  private Map<String, Object> parseJsonSafely(String body) {
+    try {
+      return objectMapper.readValue(body, new TypeReference<Map<String, Object>>() {});
+    } catch (RuntimeException exception) {
+      return Map.of();
     }
   }
 }

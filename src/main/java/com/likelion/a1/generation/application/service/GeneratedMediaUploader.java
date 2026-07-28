@@ -49,6 +49,12 @@ class GeneratedMediaUploader {
    * 실패하면(FAILED로 강등) 저장할 결과가 없으므로 {@code Chat.isGenerating}만 해제한다. 그 외(아직
    * QUEUED/PROCESSING)에는 입력받은 status를 그대로 반환한다. payload는 호출자가 전달한 맵을 그대로
    * 변형(mutate)한다.
+   *
+   * <p><b>{@code null}을 반환하면</b> 다른 폴러가 이미 이 job을 종결 처리했다는 뜻이다 — 호출자는
+   * 들고 있는 (이미 DB보다 오래된) {@code job}을 다시 저장해서는 안 되고, 그대로 스킵하거나(스케줄러)
+   * DB에서 최신 상태를 다시 읽어야 한다(수동 폴링). 이 신호 없이 호출자가 그대로 저장을 시도하면
+   * {@code @Version} 낙관적 락 충돌이 100% 확정적으로 발생한다 — 막을 수 없는 게 아니라 이미 결과를
+   * 알고 있는 채로 실패가 예정된 시도를 굳이 하는 것이므로, 그 낭비를 없앤다.
    */
   GenerationStatus applyCompletion(GenerationJob job, GenerationStatus status, Map<String, Object> payload) {
     if (status != GenerationStatus.COMPLETED && status != GenerationStatus.FAILED) {
@@ -57,11 +63,10 @@ class GeneratedMediaUploader {
 
     // 동시성 방어: getStatus 수동 폴링과 5초 스케줄러가 같은 job을 거의 동시에 종결 처리하려는 경우,
     // 둘 중 하나가 먼저 커밋을 마쳤다면 DB에서 이미 종결 상태를 볼 수 있다 — 그 경우 S3 재업로드나
-    // 채팅 메시지/에셋 중복 생성을 하지 않고 스킵한다. (호출자가 들고 있는 stale in-memory job으로 마저
-    // 진행하더라도, 뒤이은 저장에서 @Version 낙관적 락이 최종 방어선 역할을 한다.)
+    // 채팅 메시지/에셋 중복 생성을 하지 않고 스킵한다.
     if (isAlreadyFinalized(job.getId())) {
       log.info("Job {} 은(는) 이미 다른 폴러가 완료 처리함 — 중복 처리를 스킵합니다.", job.getId());
-      return status;
+      return null;
     }
 
     if (status == GenerationStatus.FAILED) {

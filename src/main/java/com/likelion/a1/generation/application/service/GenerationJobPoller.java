@@ -51,10 +51,12 @@ class GenerationJobPoller {
     if (!(modelCodeValue instanceof String modelCode) || !(externalRequestIdValue instanceof String externalRequestId)) {
       return;
     }
+    String statusUrl = stringValue(responsePayload.get("statusUrl"));
+    String responseUrl = stringValue(responsePayload.get("responseUrl"));
 
     FalGenerationStatus polled;
     try {
-      polled = falGenerationPort.poll(modelCode, externalRequestId);
+      polled = falGenerationPort.poll(modelCode, externalRequestId, statusUrl, responseUrl);
     } catch (RestClientException exception) {
       return;
     }
@@ -64,12 +66,25 @@ class GenerationJobPoller {
     merged.putAll(polled.rawResponse());
 
     newStatus = generatedMediaUploader.applyCompletion(job, newStatus, merged);
+    if (newStatus == null) {
+      // 다른 폴러가 이미 이 job을 종결 처리했다 — 저장을 시도하면 100% 낙관적 락 충돌만 나므로
+      // 아예 시도하지 않고 그대로 반환한다(docs_h/제노바_KX_생성결과.md 참고).
+      return;
+    }
 
-    job.applyPolledStatus(newStatus, merged);
-    // @Version 충돌이 나면 이 메서드 밖(REQUIRES_NEW 트랜잭션 경계)으로 그대로 던진다 — 이 job의
-    // 독립 트랜잭션만 깨끗하게 롤백되고, 호출자(GenerationVideoPollingScheduler)가 job 단위로 감싼
-    // try/catch에서 로그만 남기고 다음 job으로 넘어간다. 다른 폴러가 이미 완료 처리했다는 뜻이므로
-    // 실질적 데이터 유실은 없다 — 다음 5초 주기에도 이 job은 이미 종결 상태라 재처리되지 않는다.
+    job.applyPolledStatus(newStatus, merged, errorMessage(polled));
+    // 그래도 남는 좁은 race window(위 체크 이후 저장 사이)에서 충돌이 나면 이 메서드 밖
+    // (REQUIRES_NEW 트랜잭션 경계)으로 그대로 던진다 — 이 job의 독립 트랜잭션만 깨끗하게 롤백되고,
+    // 호출자(GenerationVideoPollingScheduler)가 job 단위로 감싼 try/catch에서 로그만 남기고 다음
+    // job으로 넘어간다. 다른 폴러가 이미 완료 처리했다는 뜻이므로 실질적 데이터 유실은 없다.
     generationJobRepository.save(job);
+  }
+
+  private String stringValue(Object value) {
+    return value instanceof String string && !string.isBlank() ? string : null;
+  }
+
+  private String errorMessage(FalGenerationStatus status) {
+    return stringValue(status.rawResponse().get("errorMessage"));
   }
 }

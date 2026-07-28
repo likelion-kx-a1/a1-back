@@ -409,21 +409,33 @@ public class GenerationAiService {
       return job;
     }
 
-    FalGenerationStatus polled = falGenerationPort.poll(modelCode, externalRequestId);
+    String statusUrl = stringValue(responsePayload.get("statusUrl"));
+    String responseUrl = stringValue(responsePayload.get("responseUrl"));
+    FalGenerationStatus polled =
+        falGenerationPort.poll(modelCode, externalRequestId, statusUrl, responseUrl);
     GenerationStatus newStatus = GenerationStatus.fromFalStatus(polled.status());
 
     Map<String, Object> merged = new LinkedHashMap<>(responsePayload);
     merged.putAll(polled.rawResponse());
 
     newStatus = generatedMediaUploader.applyCompletion(job, newStatus, merged);
+    if (newStatus == null) {
+      // 다른 폴러(백그라운드 스케줄러)가 이미 이 job을 종결 처리했다 — 저장을 시도하면 100% 낙관적
+      // 락 충돌만 나므로 시도하지 않고, DB에 이미 반영된 최신(종결) 상태를 그대로 다시 읽어 반환한다.
+      return findJob(jobId);
+    }
 
-    job.applyPolledStatus(newStatus, merged);
-    // OptimisticLockingFailureException을 여기서 잡지 않는다: Hibernate가 버전 충돌이 나는 순간
-    // 이 트랜잭션을 이미 rollback-only로 표시하기 때문에, 이 메서드 안에서 잡아서 "복구"를 시도해도
-    // 메서드가 정상 반환된 뒤 커밋 시점에 UnexpectedRollbackException으로 터진다(실측 확인됨).
-    // 그대로 던져 트랜잭션이 깨끗하게 롤백되게 하고, 복구(재조회)는 트랜잭션 경계 밖인
-    // GenerationController에서 한 번 재시도하는 방식으로 처리한다.
+    job.applyPolledStatus(newStatus, merged, stringValue(polled.rawResponse().get("errorMessage")));
+    // 그래도 남는 좁은 race window(위 체크 이후 저장 사이)에서 OptimisticLockingFailureException이
+    // 나면 여기서 잡지 않는다: Hibernate가 버전 충돌이 나는 순간 이 트랜잭션을 이미 rollback-only로
+    // 표시하기 때문에, 이 메서드 안에서 잡아서 "복구"를 시도해도 메서드가 정상 반환된 뒤 커밋 시점에
+    // UnexpectedRollbackException으로 터진다(실측 확인됨). 그대로 던져 트랜잭션이 깨끗하게 롤백되게
+    // 하고, 복구(재조회)는 트랜잭션 경계 밖인 GenerationController에서 한 번 재시도하는 방식으로 처리한다.
     return generationJobRepository.save(job);
+  }
+
+  private String stringValue(Object value) {
+    return value instanceof String string && !string.isBlank() ? string : null;
   }
 
   /**
