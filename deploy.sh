@@ -11,6 +11,8 @@ REDIS_CONTAINER_NAME="${REDIS_CONTAINER_NAME:-a1-redis}"
 DOCKER_NETWORK="${DOCKER_NETWORK:-a1-network}"
 REDIS_VOLUME="${REDIS_VOLUME:-a1-redis-data}"
 ENV_FILE="${ENV_FILE:-/run/a1-back/a1-back.env}"
+NGINX_UPLOAD_LIMIT="${NGINX_UPLOAD_LIMIT:-250M}"
+NGINX_UPLOAD_LIMIT_CONF="${NGINX_UPLOAD_LIMIT_CONF:-/etc/nginx/conf.d/a1-upload-limit.conf}"
 
 DB_URL_PARAMETER="${DB_URL_PARAMETER:-/config/a1-back/SPRING_DATASOURCE_URL}"
 DB_USERNAME_PARAMETER="${DB_USERNAME_PARAMETER:-/config/a1-back/SPRING_DATASOURCE_USERNAME}"
@@ -38,6 +40,47 @@ get_parameter() {
     --region "${AWS_REGION}" \
     --query 'Parameter.Value' \
     --output text
+}
+
+configure_nginx_upload_limit() {
+  if ! command -v nginx >/dev/null 2>&1; then
+    log "Nginx is not installed on the host; skip upload limit configuration"
+    return
+  fi
+
+  if [[ ! "${NGINX_UPLOAD_LIMIT}" =~ ^[1-9][0-9]*[KMG]$ ]]; then
+    log "Invalid NGINX_UPLOAD_LIMIT: ${NGINX_UPLOAD_LIMIT}"
+    exit 1
+  fi
+
+  log "Configure Nginx upload limit: ${NGINX_UPLOAD_LIMIT}"
+  install -d -m 755 "$(dirname "${NGINX_UPLOAD_LIMIT_CONF}")"
+
+  local backup_path="${NGINX_UPLOAD_LIMIT_CONF}.backup"
+  if [[ -f "${NGINX_UPLOAD_LIMIT_CONF}" ]]; then
+    cp -f "${NGINX_UPLOAD_LIMIT_CONF}" "${backup_path}"
+  else
+    rm -f "${backup_path}"
+  fi
+
+  printf 'client_max_body_size %s;\n' "${NGINX_UPLOAD_LIMIT}" >"${NGINX_UPLOAD_LIMIT_CONF}"
+
+  if ! nginx -t; then
+    log "Nginx configuration validation failed; restore previous configuration"
+    if [[ -f "${backup_path}" ]]; then
+      mv -f "${backup_path}" "${NGINX_UPLOAD_LIMIT_CONF}"
+    else
+      rm -f "${NGINX_UPLOAD_LIMIT_CONF}"
+    fi
+    exit 1
+  fi
+
+  rm -f "${backup_path}"
+  if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet nginx; then
+    systemctl reload nginx
+  else
+    nginx -s reload
+  fi
 }
 
 log "Load production settings from Parameter Store"
@@ -115,6 +158,7 @@ log "Check application health"
 for attempt in {1..30}; do
   if docker exec "${CONTAINER_NAME}" \
     wget -qO- http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
+    configure_nginx_upload_limit
     log "Deployment completed"
     docker image prune -f
     exit 0
