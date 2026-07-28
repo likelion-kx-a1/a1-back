@@ -13,13 +13,28 @@ public final class SseDtos {
   }
 
   public record GenerationCompletedPayload(
-      String eventType, Long jobId, String jobType, String status, String resultUrl, String message) {
+      String eventType,
+      Long chatId,
+      Long jobId,
+      String jobType,
+      String status,
+      String resultUrl,
+      String message) {
 
     public static GenerationCompletedPayload from(GenerationCompletedEvent event) {
       boolean succeeded = GenerationStatus.COMPLETED.name().equals(event.status());
-      String message = succeeded ? "AI 생성이 완료되었습니다." : "AI 생성에 실패했습니다.";
+      boolean video = event.jobType().toUpperCase().contains("VIDEO");
+      String mediaLabel = video ? "영상" : "이미지";
+      String message =
+          succeeded ? mediaLabel + " 생성이 완료되었습니다." : mediaLabel + " 생성에 실패했습니다.";
       return new GenerationCompletedPayload(
-          "JOB_COMPLETED", event.jobId(), event.jobType(), event.status(), event.resultUrl(), message);
+          "JOB_COMPLETED",
+          event.chatId(),
+          event.jobId(),
+          event.jobType(),
+          event.status(),
+          event.resultUrl(),
+          message);
     }
   }
 }

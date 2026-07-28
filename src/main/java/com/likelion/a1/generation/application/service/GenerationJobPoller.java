@@ -35,7 +35,9 @@ class GenerationJobPoller {
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   void pollJob(Long jobId) {
-    GenerationJob job = generationJobRepository.findById(jobId).orElse(null);
+    // 수동 상태 조회와 백그라운드 스케줄러가 같은 job을 동시에 완료 처리하지 못하도록
+    // 트랜잭션이 끝날 때까지 DB 행 잠금을 보유한다.
+    GenerationJob job = generationJobRepository.findByIdForUpdate(jobId).orElse(null);
     if (job == null) {
       return;
     }
