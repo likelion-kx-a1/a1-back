@@ -111,9 +111,18 @@ public class GenerationAiService {
       String instruction,
       Long parentMessageId) {
     byte[] imageBytes = decodeImage(imageBase64);
+    String userInstruction =
+        instruction == null || instruction.isBlank()
+            ? "Analyze the image and create prompts that can reproduce it."
+            : instruction.trim();
+    String effectiveInstruction =
+        userInstruction
+            + "\n\nReturn exactly two distinct prompts. "
+            + "Output only a JSON array containing two strings, without Markdown or explanation.";
 
     Map<String, Object> requestPayload = new LinkedHashMap<>();
     requestPayload.put("mimeType", mimeType);
+    requestPayload.put("effectiveInstruction", effectiveInstruction);
 
     GenerationJob job =
         generationJobRepository.save(
@@ -123,13 +132,14 @@ public class GenerationAiService {
                 null,
                 parentMessageId,
                 GenerationType.REVERSE_PROMPT.name(),
-                instruction,
+                userInstruction,
                 requestPayload));
     generationResultService.startGenerating(userId, chatId);
 
     try {
       long startedAtMs = System.currentTimeMillis();
-      AiTextGenerationResult result = imageAnalysisPort.analyze(imageBytes, mimeType, instruction);
+      AiTextGenerationResult result =
+          imageAnalysisPort.analyze(imageBytes, mimeType, effectiveInstruction);
       long analysisDurationMs = System.currentTimeMillis() - startedAtMs;
 
       Map<String, Object> responsePayload = toResponsePayload(result);

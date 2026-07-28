@@ -12,10 +12,10 @@ import org.springframework.stereotype.Component;
 @Profile({"local", "default"})
 public class MockImageAnalysisAdapter implements ImageAnalysisPort {
   private static final String MOCK_ANALYSIS_TEXT =
-      "A beautiful zero-gravity capture of a floating subject, water droplets forming suspended "
-          + "spherical refracting globules in mid-air, volumetric dust motes drifting, "
-          + "ink-in-water flow dynamics, dreamlike weightless panning shot, soft studio lighting, "
-          + "shallow depth of field.";
+      "[\"A cinematic recreation prompt focused on the subject, composition, lighting, colors, "
+          + "materials, camera angle, and environmental details visible in the reference image.\","
+          + "\"An alternative art-direction prompt that preserves the same subject and composition "
+          + "while emphasizing texture, atmosphere, depth, and photographic rendering details.\"]";
 
   @Override
   public AiTextGenerationResult analyze(byte[] imageBytes, String mimeType, String instruction) {
