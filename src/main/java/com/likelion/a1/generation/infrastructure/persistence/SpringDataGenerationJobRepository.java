@@ -15,4 +15,7 @@ interface SpringDataGenerationJobRepository extends JpaRepository<GenerationJob,
   Optional<GenerationJob> findByIdForUpdate(@Param("id") Long id);
 
   List<GenerationJob> findByStatusIn(List<String> statuses);
+
+  Optional<GenerationJob> findFirstByChatIdAndStatusInOrderByCreatedAtDesc(
+      Long chatId, List<String> statuses);
 }

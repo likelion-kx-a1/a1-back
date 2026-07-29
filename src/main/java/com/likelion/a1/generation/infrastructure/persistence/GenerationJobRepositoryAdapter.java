@@ -49,4 +49,9 @@ class GenerationJobRepositoryAdapter implements GenerationJobRepository {
   public List<GenerationJob> findByStatusIn(List<String> statuses) {
     return repository.findByStatusIn(statuses);
   }
+
+  public Optional<GenerationJob> findLatestByChatIdAndStatusIn(
+      Long chatId, List<String> statuses) {
+    return repository.findFirstByChatIdAndStatusInOrderByCreatedAtDesc(chatId, statuses);
+  }
 }
