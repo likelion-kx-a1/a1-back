@@ -144,11 +144,7 @@ public class GenerationAiService {
         instruction == null || instruction.isBlank()
             ? "이미지를 분석하여 장면을 재현할 수 있는 상세한 이미지 생성 프롬프트를 작성해 주세요."
             : instruction.trim();
-    String effectiveInstruction =
-        userInstruction
-            + "\n\n서로 다른 프롬프트를 정확히 두 개 작성하세요. "
-            + "두 프롬프트는 반드시 자연스러운 한국어로 작성하고 영어 문장으로 작성하지 마세요. "
-            + "마크다운이나 부가 설명 없이 두 문자열만 포함한 JSON 배열로 출력하세요.";
+    String effectiveInstruction = GenerationLanguagePolicy.forReversePrompt(userInstruction);
 
     Map<String, Object> requestPayload = new LinkedHashMap<>();
     requestPayload.put("mimeType", mimeType);
@@ -221,6 +217,9 @@ public class GenerationAiService {
     // 조건부로 결합한다(api_3.md 규격). sheetType이 없거나 NONE이면 원본 프롬프트가 그대로 반환된다.
     String composedPrompt = SheetPromptComposer.compose(originalPrompt, type, sheetType, sheetValue);
     String finalPrompt = composedPrompt.isBlank() ? null : composedPrompt;
+    if (type == GenerationType.IMAGE_GENERATION || type == GenerationType.IMAGE_VARIATION) {
+      finalPrompt = GenerationLanguagePolicy.forImagePrompt(finalPrompt, originalPrompt);
+    }
 
     Map<String, Object> effectiveInput = new LinkedHashMap<>(input);
     if (finalPrompt != null) {
@@ -313,7 +312,9 @@ public class GenerationAiService {
                   .generateFinalPromptBody(coreDescription, settings, hasReferenceImages)
                   .text()
               : CharacterSheetPromptTemplate.buildDirect(coreDescription, settings, hasReferenceImages);
-      String finalPrompt = CharacterSheetPromptTemplate.appendRequirements(promptBody);
+      String finalPrompt =
+          GenerationLanguagePolicy.forImagePrompt(
+              CharacterSheetPromptTemplate.appendRequirements(promptBody), coreDescription);
       long composeDurationMs = System.currentTimeMillis() - composeStartedAtMs;
 
       Map<String, Object> effectiveInput = new LinkedHashMap<>(input);
