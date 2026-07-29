@@ -12,4 +12,7 @@ public interface GenerationJobRepository {
   Optional<GenerationJob> findByIdForUpdate(Long id);
 
   List<GenerationJob> findByStatusIn(List<String> statuses);
+
+  Optional<GenerationJob> findLatestByChatIdAndStatusIn(
+      Long chatId, List<String> statuses);
 }
