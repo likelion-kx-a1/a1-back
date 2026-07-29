@@ -24,23 +24,28 @@ public class GenerationNotificationListener {
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
   public void onGenerationCompleted(GenerationCompletedEvent event) {
     boolean succeeded = GenerationStatus.COMPLETED.name().equals(event.status());
-    boolean video = event.jobType().toUpperCase().contains("VIDEO");
-    String mediaLabel = video ? "영상" : "이미지";
-    String type =
-        succeeded
-            ? (video ? "VIDEO_GENERATION_COMPLETED" : "IMAGE_GENERATION_COMPLETED")
-            : (video ? "VIDEO_GENERATION_FAILED" : "IMAGE_GENERATION_FAILED");
+    String normalizedJobType = event.jobType().toUpperCase();
+    boolean reversePrompt = normalizedJobType.contains("REVERSE_PROMPT");
+    boolean video = normalizedJobType.contains("VIDEO");
+    String generationLabel = reversePrompt ? "역프롬프트" : video ? "영상" : "이미지";
+    String notificationType =
+        reversePrompt
+            ? (succeeded ? "REVERSE_PROMPT_COMPLETED" : "REVERSE_PROMPT_FAILED")
+            : succeeded
+                ? (video ? "VIDEO_GENERATION_COMPLETED" : "IMAGE_GENERATION_COMPLETED")
+                : (video ? "VIDEO_GENERATION_FAILED" : "IMAGE_GENERATION_FAILED");
+
     if (notificationRepository.existsByUserIdAndNotificationTypeAndRelatedTypeAndRelatedId(
-        event.userId(), type, "GENERATION_JOB", event.jobId())) {
+        event.userId(), notificationType, "GENERATION_JOB", event.jobId())) {
       return;
     }
 
     notificationRepository.save(
         Notification.create(
             event.userId(),
-            type,
-            succeeded ? mediaLabel + " 생성이 완료되었습니다." : mediaLabel + " 생성에 실패했습니다.",
-            succeeded ? "생성된 에셋을 확인해 주세요." : "잠시 후 다시 요청해 주세요.",
+            notificationType,
+            succeeded ? generationLabel + " 생성이 완료되었습니다." : generationLabel + " 생성에 실패했습니다.",
+            succeeded ? "생성 결과를 확인해 주세요." : "잠시 후 다시 요청해 주세요.",
             "GENERATION_JOB",
             event.jobId()));
   }
