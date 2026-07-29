@@ -69,6 +69,117 @@ class GenerationAiServiceVideoRoutingTest {
   }
 
   @Test
+  void klingKeepsStartEndAndReferenceImageRolesSeparate() {
+    service.generateVideo(
+        1L,
+        2L,
+        false,
+        List.of("start", "end", "reference"),
+        "start",
+        "end",
+        List.of("reference"),
+        "prompt",
+        5,
+        "16:9",
+        "720p",
+        false,
+        3L);
+
+    verify(falGenerationPort)
+        .submit(
+            eq("fal-ai/kling-video/o3/standard/reference-to-video"),
+            org.mockito.ArgumentMatchers.argThat(
+                input ->
+                    "start".equals(input.get("start_image_url"))
+                        && "end".equals(input.get("end_image_url"))
+                        && List.of("reference").equals(input.get("images"))
+                        && "720p".equals(input.get("resolution"))));
+  }
+
+  @Test
+  void klingWithStartFrameOnlyDoesNotDuplicateItAsReferenceImage() {
+    service.generateVideo(
+        1L,
+        2L,
+        false,
+        List.of("start"),
+        "start",
+        null,
+        null,
+        "prompt",
+        5,
+        "16:9",
+        "720p",
+        false,
+        3L);
+
+    verify(falGenerationPort)
+        .submit(
+            eq("fal-ai/kling-video/o3/standard/reference-to-video"),
+            org.mockito.ArgumentMatchers.argThat(
+                input ->
+                    "start".equals(input.get("start_image_url"))
+                        && !input.containsKey("images")));
+  }
+
+  @Test
+  void klingRejectsEndFrameWithoutStartFrame() {
+    assertThatThrownBy(
+            () ->
+                service.generateVideo(
+                    1L,
+                    2L,
+                    false,
+                    List.of("end"),
+                    null,
+                    "end",
+                    null,
+                    "prompt",
+                    5,
+                    "16:9",
+                    "720p",
+                    false,
+                    3L))
+        .isInstanceOf(BusinessException.class);
+  }
+
+  @Test
+  void seedancePassesResolutionAndReferenceLabelsToRefinement() {
+    when(promptGenerationPort.generateFromImage(any(), eq("image/png"), any()))
+        .thenReturn(new AiTextGenerationResult("Use @Image1 and @Image2.", Map.of()));
+
+    service.generateVideo(
+        1L,
+        2L,
+        true,
+        List.of("one", "two"),
+        null,
+        null,
+        List.of("one", "two"),
+        "prompt",
+        5,
+        "16:9",
+        "1080p",
+        true,
+        3L);
+
+    verify(promptGenerationPort)
+        .generateFromImage(
+            any(),
+            eq("image/png"),
+            org.mockito.ArgumentMatchers.argThat(
+                instruction ->
+                    instruction.contains("@Image1") && instruction.contains("@Image2")));
+    verify(falGenerationPort)
+        .submit(
+            eq("bytedance/seedance-2.0/reference-to-video"),
+            org.mockito.ArgumentMatchers.argThat(
+                input ->
+                    "1080p".equals(input.get("resolution"))
+                        && List.of("one", "two").equals(input.get("images"))));
+  }
+
+  @Test
   void klingRejectsMoreThanFourReferenceImages() {
     assertThatThrownBy(() -> generate(false, List.of("1", "2", "3", "4", "5")))
         .isInstanceOf(BusinessException.class);

@@ -96,9 +96,13 @@ public class GenerationController {
             request.chatId(),
             request.highQuality(),
             request.images(),
+            request.startFrameUrl(),
+            request.endFrameUrl(),
+            request.referenceImageUrls(),
             request.prompt(),
             request.duration(),
             request.aspectRatio(),
+            request.resolution(),
             request.refinePrompt(),
             request.parentMessageId());
     return ApiResponse.success(Response.from(job));
