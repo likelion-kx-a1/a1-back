@@ -33,6 +33,8 @@ public class GenerationAiService {
   private static final Logger log = LoggerFactory.getLogger(GenerationAiService.class);
   private static final int SEEDANCE_MAX_REFERENCE_IMAGES = 9;
   private static final int KLING_MAX_REFERENCE_IMAGES = 4;
+  private static final int KLING_SAFE_PROMPT_CHARACTERS = 2400;
+  private static final int KLING_REFINEMENT_TARGET_CHARACTERS = 2300;
 
   private final GenerationJobRepository generationJobRepository;
   private final PromptGenerationPort promptGenerationPort;
@@ -388,13 +390,34 @@ public class GenerationAiService {
       if (shouldRefine) {
         long refineStartedAtMs = System.currentTimeMillis();
         byte[] referenceImageBytes = safeImages.isEmpty() ? null : tryDecodeImage(safeImages.get(0));
+        String refinementInstruction =
+            highQuality
+                ? prompt
+                : prompt
+                    + "\n\nKeep the final English prompt at or below "
+                    + KLING_REFINEMENT_TARGET_CHARACTERS
+                    + " characters. Preserve the subject, reference-image identity, action, camera, "
+                    + "lighting, setting, and ending. Remove repetition. Return only the prompt.";
         AiTextGenerationResult refined =
-            promptGenerationPort.generateFromImage(referenceImageBytes, "image/png", prompt);
+            promptGenerationPort.generateFromImage(
+                referenceImageBytes, "image/png", refinementInstruction);
         long refineDurationMs = System.currentTimeMillis() - refineStartedAtMs;
 
-        finalPrompt = refined.text();
-        responsePayload.put("refinedPrompt", finalPrompt);
+        String refinedPrompt = refined.text();
+        finalPrompt = refinedPrompt;
+        responsePayload.put("refinedPrompt", refinedPrompt);
+        responsePayload.put("refinedPromptLength", codePointLength(refinedPrompt));
         PerformanceMetrics.record(responsePayload, "refineDurationMs", refineDurationMs);
+      }
+
+      if (!highQuality) {
+        String providerPrompt = limitPromptAtSentenceBoundary(finalPrompt, KLING_SAFE_PROMPT_CHARACTERS);
+        responsePayload.put("submittedPrompt", providerPrompt);
+        responsePayload.put(
+            "promptTruncated",
+            codePointLength(finalPrompt) > codePointLength(providerPrompt));
+        responsePayload.put("submittedPromptLength", codePointLength(providerPrompt));
+        finalPrompt = providerPrompt;
       }
 
       Map<String, Object> input = new LinkedHashMap<>();
@@ -550,6 +573,32 @@ public class GenerationAiService {
     String family = highQuality ? "bytedance/seedance-2.0" : "fal-ai/kling-video/o3/standard";
     String variant = imageCount == 0 ? "text-to-video" : "reference-to-video";
     return family + "/" + variant;
+  }
+
+  private String limitPromptAtSentenceBoundary(String prompt, int maxCharacters) {
+    String normalized =
+        prompt == null
+            ? ""
+            : prompt.replace('\uFFFD', ' ').replaceAll("\\s+", " ").trim();
+    if (codePointLength(normalized) <= maxCharacters) {
+      return normalized;
+    }
+
+    int endIndex = normalized.offsetByCodePoints(0, maxCharacters);
+    String limited = normalized.substring(0, endIndex);
+    int sentenceEnd =
+        Math.max(
+            Math.max(limited.lastIndexOf(". "), limited.lastIndexOf("! ")),
+            limited.lastIndexOf("? "));
+    if (sentenceEnd >= maxCharacters * 3 / 4) {
+      return limited.substring(0, sentenceEnd + 1).trim();
+    }
+    int lastSpace = limited.lastIndexOf(' ');
+    return (lastSpace > 0 ? limited.substring(0, lastSpace) : limited).trim();
+  }
+
+  private int codePointLength(String value) {
+    return value == null ? 0 : value.codePointCount(0, value.length());
   }
 
   /**
