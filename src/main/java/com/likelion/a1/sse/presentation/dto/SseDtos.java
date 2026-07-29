@@ -8,7 +8,7 @@ public final class SseDtos {
 
   public record ConnectPayload(String eventType, String message) {
     public static ConnectPayload connected() {
-      return new ConnectPayload("CONNECTED", "SSE 연결이 성립했습니다.");
+      return new ConnectPayload("CONNECTED", "SSE 연결에 성공했습니다.");
     }
   }
 
@@ -23,10 +23,15 @@ public final class SseDtos {
 
     public static GenerationCompletedPayload from(GenerationCompletedEvent event) {
       boolean succeeded = GenerationStatus.COMPLETED.name().equals(event.status());
-      boolean video = event.jobType().toUpperCase().contains("VIDEO");
-      String mediaLabel = video ? "영상" : "이미지";
+      String normalizedJobType = event.jobType().toUpperCase();
+      boolean reversePrompt = normalizedJobType.contains("REVERSE_PROMPT");
+      boolean video = normalizedJobType.contains("VIDEO");
+      String generationLabel = reversePrompt ? "역프롬프트" : video ? "영상" : "이미지";
       String message =
-          succeeded ? mediaLabel + " 생성이 완료되었습니다." : mediaLabel + " 생성에 실패했습니다.";
+          succeeded
+              ? generationLabel + " 생성이 완료되었습니다."
+              : generationLabel + " 생성에 실패했습니다.";
+
       return new GenerationCompletedPayload(
           "JOB_COMPLETED",
           event.chatId(),
