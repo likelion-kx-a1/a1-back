@@ -78,9 +78,13 @@ public final class GenerationJobDtos {
       @NotNull Long chatId,
       boolean highQuality,
       List<String> images,
+      String startFrameUrl,
+      String endFrameUrl,
+      List<String> referenceImageUrls,
       @NotBlank String prompt,
       Integer duration,
       String aspectRatio,
+      String resolution,
       Boolean refinePrompt,
       Long parentMessageId) {}
 

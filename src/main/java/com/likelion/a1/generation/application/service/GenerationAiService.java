@@ -44,6 +44,32 @@ public class GenerationAiService {
   private final GeneratedMediaUploader generatedMediaUploader;
   private final GenerationResultService generationResultService;
 
+  public GenerationJob generateVideo(
+      Long userId,
+      Long chatId,
+      boolean highQuality,
+      List<String> images,
+      String prompt,
+      Integer duration,
+      String aspectRatio,
+      Boolean refinePrompt,
+      Long parentMessageId) {
+    return generateVideo(
+        userId,
+        chatId,
+        highQuality,
+        images,
+        null,
+        null,
+        null,
+        prompt,
+        duration,
+        aspectRatio,
+        null,
+        refinePrompt,
+        parentMessageId);
+  }
+
   public GenerationAiService(
       GenerationJobRepository generationJobRepository,
       PromptGenerationPort promptGenerationPort,
@@ -342,15 +368,34 @@ public class GenerationAiService {
       Long chatId,
       boolean highQuality,
       List<String> images,
+      String startFrameUrl,
+      String endFrameUrl,
+      List<String> referenceImageUrls,
       String prompt,
       Integer duration,
       String aspectRatio,
+      String resolution,
       Boolean refinePrompt,
       Long parentMessageId) {
-    List<String> safeImages = images == null ? List.of() : images;
+    List<String> legacyImages = sanitizeImageUrls(images);
+    List<String> explicitReferences = sanitizeImageUrls(referenceImageUrls);
+    String safeStartFrameUrl = sanitizeImageUrl(startFrameUrl);
+    String safeEndFrameUrl = sanitizeImageUrl(endFrameUrl);
+    boolean hasExplicitRolePayload =
+        safeStartFrameUrl != null || safeEndFrameUrl != null || referenceImageUrls != null;
+    List<String> safeReferences =
+        hasExplicitRolePayload ? explicitReferences : legacyImages;
+    if (highQuality) {
+      safeStartFrameUrl = null;
+      safeEndFrameUrl = null;
+    }
+    if (!highQuality && safeEndFrameUrl != null && safeStartFrameUrl == null) {
+      throw new BusinessException(
+          ErrorCode.INVALID_INPUT, List.of("마지막 프레임을 사용하려면 시작 프레임도 필요합니다."));
+    }
     int maxReferenceImages =
         highQuality ? SEEDANCE_MAX_REFERENCE_IMAGES : KLING_MAX_REFERENCE_IMAGES;
-    if (safeImages.size() > maxReferenceImages) {
+    if (safeReferences.size() > maxReferenceImages) {
       throw new BusinessException(
           ErrorCode.INVALID_INPUT,
           List.of(
@@ -361,14 +406,20 @@ public class GenerationAiService {
     }
     boolean shouldRefine = refinePrompt == null || refinePrompt;
 
-    String modelCode = resolveVideoModelCode(highQuality, safeImages.size());
+    boolean hasVisualInput =
+        !safeReferences.isEmpty() || safeStartFrameUrl != null || safeEndFrameUrl != null;
+    String modelCode = resolveVideoModelCode(highQuality, hasVisualInput);
 
     Map<String, Object> requestPayload = new LinkedHashMap<>();
     requestPayload.put("modelCode", modelCode);
     requestPayload.put("highQuality", highQuality);
-    requestPayload.put("images", safeImages);
+    requestPayload.put("images", safeReferences);
+    requestPayload.put("referenceImageUrls", safeReferences);
+    requestPayload.put("startFrameUrl", safeStartFrameUrl);
+    requestPayload.put("endFrameUrl", safeEndFrameUrl);
     requestPayload.put("duration", duration);
     requestPayload.put("aspectRatio", aspectRatio);
+    requestPayload.put("resolution", resolution);
     requestPayload.put("refinePromptEnabled", shouldRefine);
 
     GenerationJob job =
@@ -389,15 +440,15 @@ public class GenerationAiService {
 
       if (shouldRefine) {
         long refineStartedAtMs = System.currentTimeMillis();
-        byte[] referenceImageBytes = safeImages.isEmpty() ? null : tryDecodeImage(safeImages.get(0));
+        byte[] referenceImageBytes =
+            safeReferences.isEmpty() ? null : tryDecodeImage(safeReferences.get(0));
         String refinementInstruction =
-            highQuality
-                ? prompt
-                : prompt
-                    + "\n\nKeep the final English prompt at or below "
-                    + KLING_REFINEMENT_TARGET_CHARACTERS
-                    + " characters. Preserve the subject, reference-image identity, action, camera, "
-                    + "lighting, setting, and ending. Remove repetition. Return only the prompt.";
+            buildVideoRefinementInstruction(
+                highQuality,
+                prompt,
+                safeStartFrameUrl != null,
+                safeEndFrameUrl != null,
+                safeReferences.size());
         AiTextGenerationResult refined =
             promptGenerationPort.generateFromImage(
                 referenceImageBytes, "image/png", refinementInstruction);
@@ -428,8 +479,17 @@ public class GenerationAiService {
       if (aspectRatio != null) {
         input.put("aspect_ratio", aspectRatio);
       }
-      if (!safeImages.isEmpty()) {
-        input.put("images", safeImages);
+      if (resolution != null && !resolution.isBlank()) {
+        input.put("resolution", highQuality ? resolution : "720p");
+      }
+      if (!safeReferences.isEmpty()) {
+        input.put("images", safeReferences);
+      }
+      if (!highQuality && safeStartFrameUrl != null) {
+        input.put("start_image_url", safeStartFrameUrl);
+      }
+      if (!highQuality && safeEndFrameUrl != null) {
+        input.put("end_image_url", safeEndFrameUrl);
       }
 
       long submitStartedAtMs = System.currentTimeMillis();
@@ -569,10 +629,83 @@ public class GenerationAiService {
    * highQuality=true -> ByteDance Seedance 2.0, false -> fal.ai Kling O3 Standard.
    * 이미지가 없으면 text-to-video, 한 장 이상이면 장수와 관계없이 reference-to-video로 분기한다.
    */
-  private String resolveVideoModelCode(boolean highQuality, int imageCount) {
+  private String resolveVideoModelCode(boolean highQuality, boolean hasVisualInput) {
     String family = highQuality ? "bytedance/seedance-2.0" : "fal-ai/kling-video/o3/standard";
-    String variant = imageCount == 0 ? "text-to-video" : "reference-to-video";
+    String variant = hasVisualInput ? "reference-to-video" : "text-to-video";
     return family + "/" + variant;
+  }
+
+  private String buildVideoRefinementInstruction(
+      boolean highQuality,
+      String prompt,
+      boolean hasStartFrame,
+      boolean hasEndFrame,
+      int referenceImageCount) {
+    StringBuilder instruction = new StringBuilder();
+    instruction.append(
+        "Ignore any unrelated preset style or physics instruction. Follow the user's actual request "
+            + "and the visual-input roles below.\n");
+    instruction.append("Create a faithful English video-generation prompt from this request:\n");
+    instruction.append(prompt == null ? "" : prompt.trim()).append("\n\n");
+    instruction.append("Visual inputs:\n");
+    if (highQuality) {
+      for (int index = 1; index <= referenceImageCount; index++) {
+        instruction.append("- @Image").append(index).append(": reference image\n");
+      }
+      if (referenceImageCount > 0) {
+        instruction.append(
+            "Explicitly reference every relevant @ImageN, preserving subject identity, appearance, "
+                + "objects, environment, and style without inventing conflicting details.\n");
+      }
+      instruction.append(
+          "Write for Seedance 2.0. Describe action, temporal progression, camera, lighting, setting, "
+              + "and synchronized audio only when appropriate. Return only the final prompt.");
+      return instruction.toString();
+    }
+
+    instruction
+        .append("- Start frame: ")
+        .append(hasStartFrame ? "provided" : "not provided")
+        .append('\n')
+        .append("- End frame: ")
+        .append(hasEndFrame ? "provided" : "not provided")
+        .append('\n');
+    for (int index = 1; index <= referenceImageCount; index++) {
+      instruction.append("- @Image").append(index).append(": appearance/style reference\n");
+    }
+    if (hasStartFrame) {
+      instruction.append("Begin exactly from the supplied start frame. ");
+    }
+    if (hasEndFrame) {
+      instruction.append("Transition naturally and finish at the supplied end frame. ");
+    }
+    if (referenceImageCount > 0) {
+      instruction.append(
+          "Use @Image1, @Image2, etc. explicitly and preserve their identity and visual details. ");
+    }
+    instruction
+        .append(
+            "Do not treat appearance references as sequential frames. Write for Kling O3 "
+                + "reference-to-video, preserving the requested action, camera, lighting, setting, and ending. ")
+        .append("Keep the final English prompt at or below ")
+        .append(KLING_REFINEMENT_TARGET_CHARACTERS)
+        .append(" characters. Remove repetition and return only the prompt.");
+    return instruction.toString();
+  }
+
+  private List<String> sanitizeImageUrls(List<String> values) {
+    if (values == null) {
+      return List.of();
+    }
+    return values.stream()
+        .map(this::sanitizeImageUrl)
+        .filter(java.util.Objects::nonNull)
+        .distinct()
+        .toList();
+  }
+
+  private String sanitizeImageUrl(String value) {
+    return value == null || value.isBlank() ? null : value.trim();
   }
 
   private String limitPromptAtSentenceBoundary(String prompt, int maxCharacters) {

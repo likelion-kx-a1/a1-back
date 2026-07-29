@@ -20,16 +20,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
-/** prod 프로필용 실제 Anthropic Messages API 연동. 참고 이미지와 한국어 지시문을 무중력 시네마틱 영문 프롬프트로 보정한다. */
+/** Production adapter for Anthropic Messages API prompt refinement. */
 @Component
 @Profile("prod")
 public class ClaudePromptGenerationAdapter implements PromptGenerationPort {
-  private static final String PROMPT_SYSTEM_INSTRUCTION =
-      "You are a cinematic prompt engineer specialized in anti-gravity, zero-gravity physics-based "
-          + "visual generation. Expand the following Korean instruction into a single, richly detailed "
-          + "English prompt describing weightless, zero-gravity cinematic physics (suspended liquid, "
-          + "inertia decay, volumetric particles, orbiting camera movement). Respond with the English "
-          + "prompt text only, no preamble.\n\n지시문: ";
+  private static final String FAITHFUL_PROMPT_INSTRUCTION =
+      "You are a cinematic visual-generation prompt engineer. Faithfully expand the user's request "
+          + "without adding an unrelated genre, physics, subject, or camera behavior. Preserve all "
+          + "provided reference labels such as @Image1 exactly. Respond with the final English prompt "
+          + "only, with no preamble.\n\nInstruction: ";
 
   private final RestTemplate restTemplate = new RestTemplate();
   private final ObjectMapper objectMapper;
@@ -52,7 +51,8 @@ public class ClaudePromptGenerationAdapter implements PromptGenerationPort {
   }
 
   @Override
-  public AiTextGenerationResult generateFromImage(byte[] imageBytes, String mimeType, String instruction) {
+  public AiTextGenerationResult generateFromImage(
+      byte[] imageBytes, String mimeType, String instruction) {
     ResponseEntity<String> response =
         restTemplate.exchange(
             baseUrl + "/v1/messages",
@@ -64,10 +64,11 @@ public class ClaudePromptGenerationAdapter implements PromptGenerationPort {
     return new AiTextGenerationResult(extractText(raw), raw);
   }
 
-  private Map<String, Object> buildRequestBody(byte[] imageBytes, String mimeType, String instruction) {
+  private Map<String, Object> buildRequestBody(
+      byte[] imageBytes, String mimeType, String instruction) {
     Map<String, Object> textContent = new LinkedHashMap<>();
     textContent.put("type", "text");
-    textContent.put("text", PROMPT_SYSTEM_INSTRUCTION + instruction);
+    textContent.put("text", FAITHFUL_PROMPT_INSTRUCTION + instruction);
 
     List<Object> content;
     if (imageBytes != null && imageBytes.length > 0) {
@@ -79,7 +80,6 @@ public class ClaudePromptGenerationAdapter implements PromptGenerationPort {
       Map<String, Object> imageContent = new LinkedHashMap<>();
       imageContent.put("type", "image");
       imageContent.put("source", imageSource);
-
       content = List.of(imageContent, textContent);
     } else {
       content = List.of(textContent);
@@ -105,8 +105,8 @@ public class ClaudePromptGenerationAdapter implements PromptGenerationPort {
   }
 
   private String extractText(Map<String, Object> raw) {
-    Object contentObj = raw.get("content");
-    if (contentObj instanceof List<?> contentList) {
+    Object contentObject = raw.get("content");
+    if (contentObject instanceof List<?> contentList) {
       for (Object block : contentList) {
         if (block instanceof Map<?, ?> textBlock
             && "text".equals(textBlock.get("type"))
@@ -118,8 +118,11 @@ public class ClaudePromptGenerationAdapter implements PromptGenerationPort {
     throw new BusinessException(
         ErrorCode.AI_PROVIDER_REQUEST_FAILED,
         List.of(
-            "Claude 응답에 예상한 text 콘텐츠가 없습니다 (stop_reason=" + raw.get("stop_reason")
-                + ", content=" + contentObj + ")"));
+            "Claude 응답에 text 콘텐츠가 없습니다. (stop_reason="
+                + raw.get("stop_reason")
+                + ", content="
+                + contentObject
+                + ")"));
   }
 
   private Map<String, Object> parseJson(String body) {
@@ -128,7 +131,7 @@ public class ClaudePromptGenerationAdapter implements PromptGenerationPort {
     } catch (RuntimeException exception) {
       String snippet = body == null ? "null" : body.substring(0, Math.min(body.length(), 300));
       throw new BusinessException(
-          ErrorCode.AI_PROVIDER_REQUEST_FAILED, List.of("응답 파싱 실패, 원본 일부: " + snippet));
+          ErrorCode.AI_PROVIDER_REQUEST_FAILED, List.of("Claude 응답 파싱 실패, 원본 일부: " + snippet));
     }
   }
 }
