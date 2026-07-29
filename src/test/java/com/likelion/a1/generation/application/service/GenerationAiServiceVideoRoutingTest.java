@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.likelion.a1.generation.application.port.out.AiTextGenerationResult;
 import com.likelion.a1.generation.application.port.out.CharacterSheetPromptPort;
 import com.likelion.a1.generation.application.port.out.FalGenerationPort;
 import com.likelion.a1.generation.application.port.out.FalGenerationSubmission;
@@ -23,12 +24,14 @@ import org.junit.jupiter.api.Test;
 class GenerationAiServiceVideoRoutingTest {
   private GenerationJobRepository generationJobRepository;
   private FalGenerationPort falGenerationPort;
+  private PromptGenerationPort promptGenerationPort;
   private GenerationAiService service;
 
   @BeforeEach
   void setUp() {
     generationJobRepository = mock(GenerationJobRepository.class);
     falGenerationPort = mock(FalGenerationPort.class);
+    promptGenerationPort = mock(PromptGenerationPort.class);
     GenerationResultService generationResultService = mock(GenerationResultService.class);
 
     when(generationJobRepository.save(any(GenerationJob.class)))
@@ -41,7 +44,7 @@ class GenerationAiServiceVideoRoutingTest {
     service =
         new GenerationAiService(
             generationJobRepository,
-            mock(PromptGenerationPort.class),
+            promptGenerationPort,
             mock(ImageAnalysisPort.class),
             falGenerationPort,
             mock(CharacterSheetPromptPort.class),
@@ -69,6 +72,30 @@ class GenerationAiServiceVideoRoutingTest {
   void klingRejectsMoreThanFourReferenceImages() {
     assertThatThrownBy(() -> generate(false, List.of("1", "2", "3", "4", "5")))
         .isInstanceOf(BusinessException.class);
+  }
+
+  @Test
+  void klingRefinedPromptIsLimitedBeforeSubmission() {
+    String longPrompt = "A detailed cinematic action with consistent identity. ".repeat(80);
+    when(promptGenerationPort.generateFromImage(any(), eq("image/png"), any()))
+        .thenReturn(new AiTextGenerationResult(longPrompt, Map.of()));
+
+    GenerationJob job =
+        service.generateVideo(
+            1L, 2L, false, List.of("image-1"), "prompt", 5, "16:9", true, 3L);
+
+    verify(falGenerationPort)
+        .submit(
+            eq("fal-ai/kling-video/o3/standard/reference-to-video"),
+            org.mockito.ArgumentMatchers.argThat(
+                input -> {
+                  String submittedPrompt = (String) input.get("prompt");
+                  return submittedPrompt.codePointCount(0, submittedPrompt.length()) <= 2400;
+                }));
+    org.assertj.core.api.Assertions.assertThat(job.getResponsePayload().get("promptTruncated"))
+        .isEqualTo(true);
+    org.assertj.core.api.Assertions.assertThat(job.getResponsePayload().get("refinedPrompt"))
+        .isEqualTo(longPrompt);
   }
 
   private void generate(boolean highQuality, List<String> images) {
