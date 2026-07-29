@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.likelion.a1.user.domain.model.User;
 import io.jsonwebtoken.JwtException;
 import java.time.LocalDate;
+import java.util.Base64;
 import org.junit.jupiter.api.Test;
 
 class JwtTokenProviderTest {
@@ -63,7 +64,11 @@ class JwtTokenProviderTest {
   @Test
   void 변조된_토큰은_파싱에_실패한다() {
     String token = jwtTokenProvider.createAccessToken(newUser(), "session-123");
-    String tampered = token.substring(0, token.length() - 1) + (token.endsWith("a") ? "b" : "a");
+    String[] parts = token.split("\\.");
+    byte[] signature = Base64.getUrlDecoder().decode(parts[2]);
+    signature[0] ^= 0x01;
+    String tamperedSignature = Base64.getUrlEncoder().withoutPadding().encodeToString(signature);
+    String tampered = parts[0] + "." + parts[1] + "." + tamperedSignature;
 
     assertThatThrownBy(() -> jwtTokenProvider.parse(tampered)).isInstanceOf(JwtException.class);
   }
