@@ -515,6 +515,20 @@ public class GenerationAiService {
     return generationJobRepository.save(job);
   }
 
+  public GenerationJob getActiveJob(Long chatId, Long userId) {
+    GenerationJob job =
+        generationJobRepository
+            .findLatestByChatIdAndStatusIn(
+                chatId,
+                List.of(
+                    GenerationStatus.PENDING.name(),
+                    GenerationStatus.QUEUED.name(),
+                    GenerationStatus.PROCESSING.name()))
+            .orElseThrow(() -> new BusinessException(ErrorCode.GENERATION_NOT_FOUND));
+    verifyOwnership(job, userId);
+    return job;
+  }
+
   public GenerationJob getStatus(Long jobId, Long userId) {
     // 백그라운드 스케줄러와 동시에 완료 처리될 때 S3 업로드와 채팅 응답이 중복 생성되지
     // 않도록 이 상태 조회 트랜잭션도 같은 GenerationJob 행을 잠근다.

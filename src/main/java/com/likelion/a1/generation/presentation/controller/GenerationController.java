@@ -115,6 +115,13 @@ public class GenerationController {
     return ApiResponse.success(Response.from(job));
   }
 
+  @GetMapping("/chats/{chatId}/active-job")
+  public ApiResponse<Response> getActiveJob(
+      @AuthenticationPrincipal JwtPrincipal principal, @PathVariable Long chatId) {
+    GenerationJob job = generationAiService.getActiveJob(chatId, requireUserId(principal));
+    return ApiResponse.success(Response.from(job));
+  }
+
   /**
    * getStatus()는 @Version 낙관적 락 충돌 시 그 트랜잭션 안에서 복구를 시도하지 않고 그대로 던진다
    * (Hibernate가 충돌 시점에 트랜잭션을 이미 rollback-only로 표시해버려서, 같은 트랜잭션 안에서 잡아
